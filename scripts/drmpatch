@@ -1,0 +1,51 @@
+#!/bin/sh
+
+usage()
+{
+	cat << EOF
+	Usage: `basename $0` patchdir
+EOF
+
+	exit 1
+}
+
+if [ $# -ne 1 ]; then
+	usage
+fi
+
+mkdir -p $1/alreadyapplied/
+mkdir -p $1/applied/
+mkdir -p $1/rej/
+
+for file in $1/*.patch; do
+	echo "Trying to apply $file"
+	git am --3way ${file}
+	if [ $? -ne 0 ]; then
+		echo "Patch $file failed"
+		mv $file $1/rej
+		exit 1
+	fi
+	mv $file $1/applied
+	patchfile=$(echo $file | awk -F '/' '{print $NF}')
+	newfiles=$(awk '$0 == "--- /dev/null" { getline; print $2 }' $1/applied/${patchfile} | sed 's/^b\///')
+	if [ -n "${newfiles}" ]; then
+	    echo "New files appeared, makefiles needs modification"
+	    echo "New files in questions : ${newfiles}"
+	    exit 1
+	fi
+	renames=$(awk '($1 == "rename" && $2 == "from") {print $3" renamed to "; getline; print $3}' $1/applied/${patchfile})
+	if [ -n "${renames}" ]; then
+	    echo "files got renamed, makefiles needs modification"
+	    echo "renamed files in questions : "
+	    echo "${renames}"
+	    exit 1
+	fi
+	deleted=$(awk '$1 == "deleted" { getline; getline; print $2 }' $1/applied/${patchfile} | sed 's/\(a\/\)\(.*\)/\2/')
+	if [ -n "${deleted}" ]; then
+	    echo "files got deleted, makefiles needs modification"
+	    echo "deleted files in questions : "
+	    echo "${deleted}"
+	    exit 1
+	fi
+	make -sj$(sysctl -n hw.ncpu) || exit 1
+done
