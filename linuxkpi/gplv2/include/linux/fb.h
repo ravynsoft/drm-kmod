@@ -52,6 +52,14 @@ struct fb_bitfield {
     /* right */
 };
 
+
+#define FB_NONSTD_REV_PIX_IN_B	2
+/* Internal HW accel */
+#define ROP_COPY 0
+#define ROP_XOR  1
+#define FB_VISUAL_DIRECTCOLOR		4	/* Direct color */
+
+
 struct fb_var_screeninfo {
 
 

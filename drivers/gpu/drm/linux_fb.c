@@ -309,3 +309,41 @@ linux_fb_get_options(const char *connector_name, char **option)
 
 	return (*option != NULL ? 0 : -ENOENT);
 }
+
+void
+cfb_fillrect(struct linux_fb_info *p, const struct fb_fillrect *rect)
+{
+	tainted_cfb_fillrect(p, rect);
+}
+
+void
+cfb_copyarea(struct linux_fb_info *p, const struct fb_copyarea *area)
+{
+
+	tainted_cfb_copyarea(p, area);
+}
+
+void
+cfb_imageblit(struct linux_fb_info *p, const struct fb_image *image)
+{
+	tainted_cfb_imageblit(p, image);
+}
+
+void
+sys_fillrect(struct linux_fb_info *p, const struct fb_fillrect *rect)
+{
+	tainted_cfb_fillrect(p, rect);
+}
+
+void
+sys_copyarea(struct linux_fb_info *p, const struct fb_copyarea *area)
+{
+
+	tainted_cfb_copyarea(p, area);
+}
+
+void
+sys_imageblit(struct linux_fb_info *p, const struct fb_image *image)
+{
+	tainted_cfb_imageblit(p, image);
+}

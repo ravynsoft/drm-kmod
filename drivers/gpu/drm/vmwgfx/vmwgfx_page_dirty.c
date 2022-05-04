@@ -26,6 +26,7 @@
  **************************************************************************/
 #include "vmwgfx_drv.h"
 
+#define	pte_t	linux_pte_t
 /*
  * Different methods for tracking dirty:
  * VMW_BO_DIRTY_PAGETABLE - Scan the pagetable for hardware dirty bits
@@ -84,6 +85,8 @@ static void vmw_bo_dirty_scan_pagetable(struct vmw_buffer_object *vbo)
 {
 	struct vmw_bo_dirty *dirty = vbo->dirty;
 	pgoff_t offset = drm_vma_node_start(&vbo->base.base.vma_node);
+	
+	#ifdef __linux__
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
 	pgoff_t num_marked;
 
@@ -96,16 +99,19 @@ static void vmw_bo_dirty_scan_pagetable(struct vmw_buffer_object *vbo)
 		dirty->change_count++;
 	else
 		dirty->change_count = 0;
+	#endif
 
 	if (dirty->change_count > VMW_DIRTY_NUM_CHANGE_TRIGGERS) {
 		dirty->change_count = 0;
 		dirty->method = VMW_BO_DIRTY_MKWRITE;
+		#ifdef __linux__
 		wp_shared_mapping_range(mapping,
 					offset, dirty->bitmap_size);
 		clean_record_shared_mapping_range(mapping,
 						  offset, dirty->bitmap_size,
 						  offset, &dirty->bitmap[0],
 						  &dirty->start, &dirty->end);
+		#endif
 	}
 }
 
@@ -122,12 +128,14 @@ static void vmw_bo_dirty_scan_mkwrite(struct vmw_buffer_object *vbo)
 {
 	struct vmw_bo_dirty *dirty = vbo->dirty;
 	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
+	#ifdef __linux__
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
 	pgoff_t num_marked;
+	#endif
 
 	if (dirty->end <= dirty->start)
 		return;
-
+	#ifdef __linux__
 	num_marked = wp_shared_mapping_range(vbo->base.bdev->dev_mapping,
 					dirty->start + offset,
 					dirty->end - dirty->start);
@@ -138,15 +146,18 @@ static void vmw_bo_dirty_scan_mkwrite(struct vmw_buffer_object *vbo)
 	} else {
 		dirty->change_count = 0;
 	}
+	#endif
 
 	if (dirty->change_count > VMW_DIRTY_NUM_CHANGE_TRIGGERS) {
 		pgoff_t start = 0;
 		pgoff_t end = dirty->bitmap_size;
 
 		dirty->method = VMW_BO_DIRTY_PAGETABLE;
+		#ifdef __linux__
 		clean_record_shared_mapping_range(mapping, offset, end, offset,
 						  &dirty->bitmap[0],
 						  &start, &end);
+		#endif
 		bitmap_clear(&dirty->bitmap[0], 0, dirty->bitmap_size);
 		if (dirty->start < dirty->end)
 			bitmap_set(&dirty->bitmap[0], dirty->start,
@@ -188,16 +199,21 @@ static void vmw_bo_dirty_pre_unmap(struct vmw_buffer_object *vbo,
 {
 	struct vmw_bo_dirty *dirty = vbo->dirty;
 	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
+	#ifdef __linux__
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
+ 	
 
+	#endif
 	if (dirty->method != VMW_BO_DIRTY_PAGETABLE || start >= end)
 		return;
 
+	#ifdef __linux__
 	wp_shared_mapping_range(mapping, start + offset, end - start);
 	clean_record_shared_mapping_range(mapping, start + offset,
 					  end - start, offset,
 					  &dirty->bitmap[0], &dirty->start,
 					  &dirty->end);
+	#endif
 }
 
 /**
@@ -212,11 +228,15 @@ void vmw_bo_dirty_unmap(struct vmw_buffer_object *vbo,
 			pgoff_t start, pgoff_t end)
 {
 	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
+	#ifdef __linux__
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
+	#endif
 
 	vmw_bo_dirty_pre_unmap(vbo, start, end);
+	#ifdef __linux__
 	unmap_shared_mapping_range(mapping, (offset + start) << PAGE_SHIFT,
 				   (loff_t) (end - start) << PAGE_SHIFT);
+	#endif
 }
 
 /**
@@ -267,6 +287,8 @@ int vmw_bo_dirty_add(struct vmw_buffer_object *vbo)
 	if (num_pages < PAGE_SIZE / sizeof(pte_t)) {
 		dirty->method = VMW_BO_DIRTY_PAGETABLE;
 	} else {
+
+		#ifdef __linux__
 		struct address_space *mapping = vbo->base.bdev->dev_mapping;
 		pgoff_t offset = drm_vma_node_start(&vbo->base.base.vma_node);
 
@@ -278,6 +300,10 @@ int vmw_bo_dirty_add(struct vmw_buffer_object *vbo)
 						  offset,
 						  &dirty->bitmap[0],
 						  &dirty->start, &dirty->end);
+		#elif defined(__FreeBSD__)
+		dirty->method = VMW_BO_DIRTY_MKWRITE;
+		#endif
+
 	}
 
 	vbo->dirty = dirty;
