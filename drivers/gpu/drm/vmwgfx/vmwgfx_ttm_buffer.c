@@ -408,6 +408,11 @@ static int vmw_ttm_map_for_dma(struct vmw_ttm_tt *vmw_tt)
 	return dma_map_sgtable(dev, &vmw_tt->sgt, DMA_BIDIRECTIONAL, 0);
 }
 
+static inline unsigned int dma_get_max_seg_size(struct device *dev)
+{
+	return SZ_64K;
+}
+
 /**
  * vmw_ttm_map_dma - Make sure TTM pages are visible to the device
  *
@@ -454,22 +459,19 @@ static int vmw_ttm_map_dma(struct vmw_ttm_tt *vmw_tt)
 		ret = ttm_mem_global_alloc(glob, vmw_tt->sg_alloc_size, &ctx);
 		if (unlikely(ret != 0))
 			return ret;
-/*
-		sg = __sg_alloc_table_from_pages(&vmw_tt->sgt, vsgt->pages,
+
+		ret = __sg_alloc_table_from_pages(&vmw_tt->sgt, vsgt->pages,
 				vsgt->num_pages, 0,
 				(unsigned long) vsgt->num_pages << PAGE_SHIFT,
 				dma_get_max_seg_size(dev_priv->dev->dev),
 				GFP_KERNEL);
-		if (IS_ERR(sg)) {
-			ret = PTR_ERR(sg);
-			goto out_sg_alloc_fail;
-		}
-*/
+/*
 		ret = sg_alloc_table_from_pages(&vmw_tt->sgt, vsgt->pages,
 				vsgt->num_pages, 0,
 				(unsigned long)
 				vsgt->num_pages << PAGE_SHIFT,
 				GFP_KERNEL);
+*/
 		if (unlikely(ret != 0))
 			goto out_sg_alloc_fail;
 
@@ -483,6 +485,7 @@ static int vmw_ttm_map_dma(struct vmw_ttm_tt *vmw_tt)
 		}
 
 		ret = vmw_ttm_map_for_dma(vmw_tt);
+		printf("vmw_ttm_map_for_dma(%p) = %d\n",vmw_tt, ret);
 		if (unlikely(ret == 0))
 			goto out_map_fail;
 
