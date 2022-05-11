@@ -483,7 +483,7 @@ static int vmw_ttm_map_dma(struct vmw_ttm_tt *vmw_tt)
 		}
 
 		ret = vmw_ttm_map_for_dma(vmw_tt);
-		if (unlikely(ret != 0))
+		if (unlikely(ret == 0))
 			goto out_map_fail;
 
 		break;
@@ -835,6 +835,7 @@ int vmw_bo_create_and_populate(struct vmw_private *dev_priv,
 
 	ret = ttm_bo_reserve(bo, false, true, NULL);
 	BUG_ON(ret != 0);
+
 	ret = vmw_ttm_populate(bo->bdev, bo->ttm, &ctx);
 	if (likely(ret == 0)) {
 		struct vmw_ttm_tt *vmw_tt =

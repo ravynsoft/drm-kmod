@@ -84,9 +84,10 @@ struct vmw_bo_dirty {
 static void vmw_bo_dirty_scan_pagetable(struct vmw_buffer_object *vbo)
 {
 	struct vmw_bo_dirty *dirty = vbo->dirty;
-	pgoff_t offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	
 	#ifdef __linux__
+	pgoff_t offset = drm_vma_node_start(&vbo->base.base.vma_node);
+
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
 	pgoff_t num_marked;
 
@@ -127,8 +128,8 @@ static void vmw_bo_dirty_scan_pagetable(struct vmw_buffer_object *vbo)
 static void vmw_bo_dirty_scan_mkwrite(struct vmw_buffer_object *vbo)
 {
 	struct vmw_bo_dirty *dirty = vbo->dirty;
-	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	#ifdef __linux__
+	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
 	pgoff_t num_marked;
 	#endif
@@ -149,11 +150,11 @@ static void vmw_bo_dirty_scan_mkwrite(struct vmw_buffer_object *vbo)
 	#endif
 
 	if (dirty->change_count > VMW_DIRTY_NUM_CHANGE_TRIGGERS) {
+		dirty->method = VMW_BO_DIRTY_PAGETABLE;
+
+		#ifdef __linux__
 		pgoff_t start = 0;
 		pgoff_t end = dirty->bitmap_size;
-
-		dirty->method = VMW_BO_DIRTY_PAGETABLE;
-		#ifdef __linux__
 		clean_record_shared_mapping_range(mapping, offset, end, offset,
 						  &dirty->bitmap[0],
 						  &start, &end);
@@ -198,8 +199,8 @@ static void vmw_bo_dirty_pre_unmap(struct vmw_buffer_object *vbo,
 				   pgoff_t start, pgoff_t end)
 {
 	struct vmw_bo_dirty *dirty = vbo->dirty;
-	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	#ifdef __linux__
+	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
  	
 
@@ -227,8 +228,8 @@ static void vmw_bo_dirty_pre_unmap(struct vmw_buffer_object *vbo,
 void vmw_bo_dirty_unmap(struct vmw_buffer_object *vbo,
 			pgoff_t start, pgoff_t end)
 {
-	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	#ifdef __linux__
+	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
 	#endif
 
@@ -473,8 +474,8 @@ vm_fault_t vmw_bo_vm_fault(struct vm_fault *vmf)
 	if (ret)
 		return ret;
 
-	num_prefault = (vma->vm_flags & VM_RAND_READ) ? 1 :
-		TTM_BO_VM_NUM_PREFAULT;
+	num_prefault = 1; /* (vma->vm_flags & VM_RAND_READ) ? 1 :
+		TTM_BO_VM_NUM_PREFAULT; */
 
 	if (vbo->dirty) {
 		pgoff_t allowed_prefault;
