@@ -386,7 +386,6 @@ static struct fb_deferred_io vmw_defio = {
  * Draw code
  */
 
-#ifdef __linux__
 static void vmw_fb_fillrect(struct fb_info *info, const struct fb_fillrect *rect)
 {
 	cfb_fillrect(info, rect);
@@ -407,7 +406,6 @@ static void vmw_fb_imageblit(struct fb_info *info, const struct fb_image *image)
 	vmw_fb_dirty_mark(info->par, image->dx, image->dy,
 			  image->width, image->height);
 }
-#endif
 
 /*
  * Bring up code
@@ -447,16 +445,18 @@ err_unlock:
 static int vmw_fb_compute_depth(struct fb_var_screeninfo *var,
 				int *depth)
 {
-#ifdef __linux__
 	switch (var->bits_per_pixel) {
 	case 32:
+#ifdef __linux__
 		*depth = (var->transp.length > 0) ? 32 : 24;
+#elif __FreeBSD__
+		*depth = 32; // always ARGB8888
+#endif
 		break;
 	default:
 		DRM_ERROR("Bad bpp %u.\n", var->bits_per_pixel);
 		return -EINVAL;
 	}
-#endif
 	return 0;
 }
 
