@@ -921,7 +921,7 @@ static int vmw_cmdbuf_space_inline(struct vmw_cmdbuf_man *man,
 	if (WARN_ON_ONCE(size > VMW_CMDBUF_INLINE_SIZE))
 		return -ENOMEM;
 
-	dheader = dma_pool_zalloc(man->dheaders, GFP_KERNEL,
+	dheader = dma_pool_alloc(man->dheaders, GFP_KERNEL,
 				  &header->handle);
 	if (!dheader)
 		return -ENOMEM;
