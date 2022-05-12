@@ -9,6 +9,11 @@
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_placement.h>
 
+#if defined(CONFIG_MMU) && defined(CONFIG_TRANSPARENT_HUGEPAGE)
+#include <uapi/asm/mman.h>
+#include <drm/drm_vma_manager.h>
+#endif
+
 /**
  * struct vmw_thp_manager - Range manager implementing huge page alignment
  *
@@ -73,7 +78,9 @@ static int vmw_thp_get_node(struct ttm_resource_manager *man,
 
 	spin_lock(&rman->lock);
 	if (IS_ENABLED(CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD)) {
+		#ifdef CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD
 		align_pages = (HPAGE_PUD_SIZE >> PAGE_SHIFT);
+		#endif
 		if (mem->num_pages >= align_pages) {
 			ret = vmw_thp_insert_aligned(mm, node, align_pages,
 						     place, mem, lpfn, mode);
@@ -81,8 +88,9 @@ static int vmw_thp_get_node(struct ttm_resource_manager *man,
 				goto found_unlock;
 		}
 	}
-
+	#ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	align_pages = (HPAGE_PMD_SIZE >> PAGE_SHIFT);
+	#endif
 	if (mem->num_pages >= align_pages) {
 		ret = vmw_thp_insert_aligned(mm, node, align_pages, place, mem,
 					     lpfn, mode);
