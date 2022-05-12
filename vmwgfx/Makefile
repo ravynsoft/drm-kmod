@@ -40,7 +40,9 @@ SRCS=	\
 	vmwgfx_simple_resource.c \
 	vmwgfx_so.c \
 	vmwgfx_stdu.c \
+	vmwgfx_streamoutput.c \
 	vmwgfx_surface.c \
+	vmwgfx_thp.c \
 	vmwgfx_ttm_buffer.c \
 	vmwgfx_ttm_glue.c \
 	vmwgfx_va.c \
@@ -91,4 +93,5 @@ CWARNFLAGS.vmwgfx_kms.c= -Wno-missing-prototypes
 CWARNFLAGS.vmwgfx_msg.c= -Wno-missing-prototypes
 CWARNFLAGS.vmwgfx_overlay.c= -Wno-unused-function
 CWARNFLAGS.vmwgfx_stdu.c= -Wno-cast-qual
-
+CWARNFLAGS.vmwgfx_drv.c = -Wno-error -Wimplicit-function-declaration
+CWARNFLAGS.vmwgfx_msg.c = -Wno-error -Wimplicit-function-declaration
