@@ -28,10 +28,8 @@
 #include <linux/console.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
-
 #include <linux/pci.h>
 #include <linux/mem_encrypt.h>
-
 
 #include <drm/drm_drv.h>
 #include <drm/drm_ioctl.h>
@@ -43,7 +41,6 @@
 #include "ttm_object.h"
 #include "vmwgfx_binding.h"
 #include "vmwgfx_drv.h"
-
 
 #define VMWGFX_DRIVER_DESC "Linux drm driver for VMware graphics devices"
 #define VMWGFX_CHIP_SVGAII 0
@@ -159,6 +156,9 @@ SYSCTL_NODE(_hw, OID_AUTO, vmwgfx,
 #define DRM_IOCTL_VMW_GB_SURFACE_REF_EXT				\
 	DRM_IOWR(DRM_COMMAND_BASE + DRM_VMW_GB_SURFACE_REF_EXT,		\
 		union drm_vmw_gb_surface_reference_ext_arg)
+#define DRM_IOCTL_VMW_MSG						\
+	DRM_IOWR(DRM_COMMAND_BASE + DRM_VMW_MSG,			\
+		struct drm_vmw_msg_arg)
 
 /**
  * The core DRM version of this macro doesn't account for
@@ -251,6 +251,9 @@ static const struct drm_ioctl_desc vmw_ioctls[] = {
 		      DRM_RENDER_ALLOW),
 	VMW_IOCTL_DEF(VMW_GB_SURFACE_REF_EXT,
 		      vmw_gb_surface_reference_ext_ioctl,
+		      DRM_RENDER_ALLOW),
+	VMW_IOCTL_DEF(VMW_MSG,
+		      vmw_msg_ioctl,
 		      DRM_RENDER_ALLOW),
 };
 
@@ -580,7 +583,7 @@ static int vmw_dma_select_mode(struct vmw_private *dev_priv)
 		[vmw_dma_map_populate] = "Caching DMA mappings.",
 		[vmw_dma_map_bind] = "Giving up DMA mappings early."};
 
-	
+
 	if (vmw_force_coherent)
 		dev_priv->map_mode = vmw_dma_alloc_coherent;
 	else if (vmw_restrict_iommu)
@@ -1285,6 +1288,17 @@ static void vmw_remove(struct pci_dev *pdev)
 	pci_disable_device(pdev);
 }
 
+static unsigned long
+vmw_get_unmapped_area(struct file *file, unsigned long uaddr,
+		      unsigned long len, unsigned long pgoff,
+		      unsigned long flags)
+{
+	struct drm_file *file_priv = file->private_data;
+	struct vmw_private *dev_priv = vmw_priv(file_priv->minor->dev);
+
+	return drm_get_unmapped_area(file, uaddr, len, pgoff, flags,
+				     &dev_priv->vma_manager);
+}
 
 static int vmwgfx_pm_notifier(struct notifier_block *nb, unsigned long val,
 			      void *ptr)
@@ -1457,7 +1471,7 @@ static const struct file_operations vmwgfx_driver_fops = {
 	.compat_ioctl = vmw_compat_ioctl,
 #endif
 	.llseek = noop_llseek,
-
+	.get_unmapped_area = vmw_get_unmapped_area,
 };
 
 static struct drm_driver driver = {
