@@ -155,6 +155,8 @@ static void vmw_bo_dirty_scan_mkwrite(struct vmw_buffer_object *vbo)
 		#ifdef __linux__
 		pgoff_t start = 0;
 		pgoff_t end = dirty->bitmap_size;
+
+		dirty->method = VMW_BO_DIRTY_PAGETABLE;
 		clean_record_shared_mapping_range(mapping, offset, end, offset,
 						  &dirty->bitmap[0],
 						  &start, &end);
