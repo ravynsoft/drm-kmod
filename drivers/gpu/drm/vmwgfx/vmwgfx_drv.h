@@ -31,7 +31,6 @@
 #include <linux/suspend.h>
 #include <linux/sync_file.h>
 
-
 #include <drm/drm_auth.h>
 #include <drm/drm_device.h>
 #include <drm/drm_file.h>
@@ -394,7 +393,6 @@ struct vmw_piter {
 	dma_addr_t (*dma_address)(struct vmw_piter *);
 	struct page *(*page)(struct vmw_piter *);
 };
-
 
 /*
  * enum vmw_display_unit_type - Describes the display unit
@@ -1405,6 +1403,23 @@ extern struct vmw_resource *
 vmw_shader_lookup(struct vmw_cmdbuf_res_manager *man,
 		  u32 user_key, SVGA3dShaderType shader_type);
 
+/*
+ * Streamoutput management
+ */
+struct vmw_resource *
+vmw_dx_streamoutput_lookup(struct vmw_cmdbuf_res_manager *man,
+			   u32 user_key);
+int vmw_dx_streamoutput_add(struct vmw_cmdbuf_res_manager *man,
+			    struct vmw_resource *ctx,
+			    SVGA3dStreamOutputId user_key,
+			    struct list_head *list);
+void vmw_dx_streamoutput_set_size(struct vmw_resource *res, u32 size);
+int vmw_dx_streamoutput_remove(struct vmw_cmdbuf_res_manager *man,
+			       SVGA3dStreamOutputId user_key,
+			       struct list_head *list);
+void vmw_dx_streamoutput_cotable_list_scrub(struct vmw_private *dev_priv,
+					    struct list_head *list,
+					    bool readback);
 
 /*
  * Command buffer managed resources - vmwgfx_cmdbuf_res.c
@@ -1523,6 +1538,8 @@ int vmw_bo_cpu_blit(struct ttm_buffer_object *dst,
 int vmw_host_get_guestinfo(const char *guest_info_param,
 			   char *buffer, size_t *length);
 int vmw_host_log(const char *log);
+int vmw_msg_ioctl(struct drm_device *dev, void *data,
+		  struct drm_file *file_priv);
 
 /* VMW logging */
 
