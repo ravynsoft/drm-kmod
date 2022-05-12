@@ -1471,7 +1471,11 @@ static const struct file_operations vmwgfx_driver_fops = {
 	.compat_ioctl = vmw_compat_ioctl,
 #endif
 	.llseek = noop_llseek,
+
+#ifdef __linux__
 	.get_unmapped_area = vmw_get_unmapped_area,
+#endif
+
 };
 
 static struct drm_driver driver = {
