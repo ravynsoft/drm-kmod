@@ -404,8 +404,13 @@ static void vmw_ttm_unmap_from_dma(struct vmw_ttm_tt *vmw_tt)
 static int vmw_ttm_map_for_dma(struct vmw_ttm_tt *vmw_tt)
 {
 	struct device *dev = vmw_tt->dev_priv->dev->dev;
+	int ret;
+	ret =  dma_map_sgtable(dev, &vmw_tt->sgt, DMA_BIDIRECTIONAL, 0);
 
-	return dma_map_sgtable(dev, &vmw_tt->sgt, DMA_BIDIRECTIONAL, 0);
+	if (unlikely(ret == 0))
+		return -ENOMEM;
+
+	return 0;
 }
 
 static inline unsigned int dma_get_max_seg_size(struct device *dev)
@@ -486,7 +491,7 @@ static int vmw_ttm_map_dma(struct vmw_ttm_tt *vmw_tt)
 
 		ret = vmw_ttm_map_for_dma(vmw_tt);
 		printf("vmw_ttm_map_for_dma(%p) = %d\n",vmw_tt, ret);
-		if (unlikely(ret == 0))
+		if (unlikely(ret != 0))
 			goto out_map_fail;
 
 		break;
