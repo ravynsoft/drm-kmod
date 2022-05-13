@@ -116,10 +116,13 @@ static int vmw_fb_setcolreg(unsigned regno, unsigned red, unsigned green,
 static int vmw_fb_check_var(struct fb_var_screeninfo *var,
 			    struct fb_info *info)
 {
+#ifdef __linux__
 	int depth = var->bits_per_pixel;
+#endif
 	struct vmw_fb_par *par = info->par;
 	struct vmw_private *vmw_priv = par->vmw_priv;
 
+#ifdef __linux__
 	switch (var->bits_per_pixel) {
 	case 32:
 		depth = (var->transp.length > 0) ? 32 : 24;
@@ -154,6 +157,7 @@ static int vmw_fb_check_var(struct fb_var_screeninfo *var,
 		DRM_ERROR("Bad depth %u.\n", depth);
 		return -EINVAL;
 	}
+#endif
 
 	if ((var->xoffset + var->xres) > par->max_width ||
 	    (var->yoffset + var->yres) > par->max_height) {
@@ -646,6 +650,8 @@ out_unlock:
 
 static const struct fb_ops vmw_fb_ops = {
 	.owner = THIS_MODULE,
+	DRM_FB_HELPER_DEFAULT_OPS,
+#ifdef __linux__
 	.fb_check_var = vmw_fb_check_var,
 	.fb_set_par = vmw_fb_set_par,
 	.fb_setcolreg = vmw_fb_setcolreg,
@@ -654,6 +660,7 @@ static const struct fb_ops vmw_fb_ops = {
 	.fb_imageblit = vmw_fb_imageblit,
 	.fb_pan_display = vmw_fb_pan_display,
 	.fb_blank = vmw_fb_blank,
+#endif
 };
 
 int vmw_fb_init(struct vmw_private *vmw_priv)
@@ -712,6 +719,7 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	/*
 	 * Fixed and var
 	 */
+#ifdef __linux__
 	strcpy(info->fix.id, "svgadrmfb");
 	info->fix.type = FB_TYPE_PACKED_PIXELS;
 	info->fix.visual = FB_VISUAL_TRUECOLOR;
@@ -720,6 +728,7 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	info->fix.ypanstep = 1; /* doing it in hw */
 	info->fix.ywrapstep = 0;
 	info->fix.accel = FB_ACCEL_NONE;
+#endif
 	info->fix.line_length = fb_pitch;
 
 	info->fix.smem_start = 0;
@@ -731,6 +740,7 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 
 	info->fbops = &vmw_fb_ops;
 
+#ifdef __linux__
 	/* 24 depth per default */
 	info->var.red.offset = 16;
 	info->var.green.offset = 8;
@@ -740,6 +750,7 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	info->var.blue.length = 8;
 	info->var.transp.offset = 0;
 	info->var.transp.length = 0;
+#endif
 
 	info->var.xres_virtual = fb_width;
 	info->var.yres_virtual = fb_height;
