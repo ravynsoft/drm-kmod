@@ -979,12 +979,14 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 		VMWGFX_DRIVER_MAJOR, VMWGFX_DRIVER_MINOR,
 		VMWGFX_DRIVER_PATCHLEVEL);
 	vmw_host_log(host_log);
-
+	
+	#ifdef __linux__
 	if (dev_priv->enable_fb) {
 		vmw_fifo_resource_inc(dev_priv);
 		vmw_svga_enable(dev_priv);
 		vmw_fb_init(dev_priv);
 	}
+	#endif
 
 	dev_priv->pm_nb.notifier_call = vmwgfx_pm_notifier;
 	register_pm_notifier(&dev_priv->pm_nb);
