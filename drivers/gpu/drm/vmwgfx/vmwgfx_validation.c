@@ -627,8 +627,10 @@ int vmw_validation_bo_validate(struct vmw_validation_context *ctx, bool intr)
 			entry->coherent_count -= coherent_count;
 		}
 
+		
 		if (vbo->dirty)
 			vmw_bo_dirty_scan(vbo);
+		
 	}
 	return 0;
 }

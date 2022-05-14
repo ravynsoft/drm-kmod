@@ -33,16 +33,13 @@
 
 #include "vmwgfx_drv.h"
 #include "vmwgfx_kms.h"
+#include <linux/fb.h>
 
 #ifdef __FreeBSD__
 #include <dev/vt/vt.h>
 #include "vmwgfx_fb_freebsd.h"
 #define	fb_info linux_fb_info
 #if 1
-#define	framebuffer_alloc vmw_framebuffer_alloc
-#define	register_framebuffer   vmw_register_framebuffer
-#define	unregister_framebuffer vmw_unregister_framebuffer
-#else
 #define	register_framebuffer   linux_register_framebuffer
 #define	unregister_framebuffer linux_unregister_framebuffer
 #endif

@@ -654,7 +654,7 @@ int ttm_prime_fd_to_handle(struct ttm_object_file *tfile,
 	struct ttm_prime_object *prime;
 	struct ttm_base_object *base;
 	int ret;
-	print("LOADING DMA BUF GET")
+	printf("LOADING DMA BUF GET");
 	dma_buf = dma_buf_get(fd);
 	if (IS_ERR(dma_buf))
 		return PTR_ERR(dma_buf);

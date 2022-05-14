@@ -33,6 +33,7 @@ SRCS=	\
 	vmwgfx_msg.c \
 	vmwgfx_overlay.c \
 	vmwgfx_prime.c \
+	vmwgfx_page_dirty.c \
 	vmwgfx_resource.c \
 	vmwgfx_scrn.c \
 	vmwgfx_shader.c \
@@ -90,3 +91,4 @@ CWARNFLAGS.vmwgfx_kms.c= -Wno-missing-prototypes
 CWARNFLAGS.vmwgfx_msg.c= -Wno-missing-prototypes
 CWARNFLAGS.vmwgfx_overlay.c= -Wno-unused-function
 CWARNFLAGS.vmwgfx_stdu.c= -Wno-cast-qual
+
