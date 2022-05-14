@@ -3,15 +3,23 @@
 SYSDIR?=/usr/src/sys
 .include "${SYSDIR}/conf/kern.opts.mk"
 
+<<<<<<< HEAD
 _VALID_KMODS=	dmabuf linuxkpi ttm drm dummygfx i915 amd radeon
+=======
+_VALID_KMODS=	dmabuf linuxkpi ttm drm dummygfx i915 amd radeon vmwgfx
+>>>>>>> f5437c5ec (Initial commit)
 
 SUPPORTED_ARCH=	amd64 \
 		i386 \
 		aarch64 \
+<<<<<<< HEAD
 		powerpc64 \
 		powerpc64le \
 		riscv64 \
 		riscv64sf
+=======
+		
+>>>>>>> f5437c5ec (Initial commit)
 
 .if empty(SUPPORTED_ARCH:M${MACHINE_ARCH})
 .error "Unsupported architetures ${MACHINE_ARCH}"
@@ -22,7 +30,15 @@ DEFAULT_KMODS=	dmabuf		\
 		ttm		\
 		drm		\
 		amd		\
+<<<<<<< HEAD
 		radeon
+=======
+		radeon		\
+		vmwgfx
+		
+	
+		
+>>>>>>> f5437c5ec (Initial commit)
 
 .if ${MACHINE_ARCH} == "amd64" || ${MACHINE_ARCH} == "i386"
 DEFAULT_KMODS+=	i915
