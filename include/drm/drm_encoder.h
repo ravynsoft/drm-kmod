@@ -195,6 +195,7 @@ int drm_encoder_init(struct drm_device *dev,
 		     const struct drm_encoder_funcs *funcs,
 		     int encoder_type, const char *name, ...);
 
+
 /**
  * drm_encoder_index - find the index of a registered encoder
  * @encoder: encoder to find index for
@@ -206,6 +207,13 @@ static inline unsigned int drm_encoder_index(const struct drm_encoder *encoder)
 {
 	return encoder->index;
 }
+
+
+
+
+int drm_simple_encoder_init(struct drm_device *dev,
+                            struct drm_encoder *encoder,
+                            int encoder_type);
 
 /**
  * drm_encoder_mask - find the mask of a registered encoder

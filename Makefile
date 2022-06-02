@@ -3,12 +3,15 @@
 SYSDIR?=/usr/src/sys
 .include "${SYSDIR}/conf/kern.opts.mk"
 
-_VALID_KMODS=	dmabuf linuxkpi ttm drm dummygfx vmwgfx
+_VALID_KMODS=	dmabuf linuxkpi ttm drm dummygfx qxl
 
 SUPPORTED_ARCH=	amd64 \
 		i386 \
 		aarch64 \
-		
+		powerpc64 \
+		powerpc64le \
+		riscv64 \
+		riscv64sf
 
 .if empty(SUPPORTED_ARCH:M${MACHINE_ARCH})
 .error "Unsupported architetures ${MACHINE_ARCH}"
@@ -18,12 +21,10 @@ DEFAULT_KMODS=	dmabuf		\
 		linuxkpi	\
 		ttm		\
 		drm		
-		
 	
-		
 
 .if ${MACHINE_ARCH} == "amd64" || ${MACHINE_ARCH} == "i386"
-DEFAULT_KMODS+=	vmwgfx
+DEFAULT_KMODS+=	qxl
 .endif
 
 .if defined(DUMMYGFX)
