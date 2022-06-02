@@ -94,7 +94,8 @@ struct fileops dma_buf_fileops  = {
 
 #define fp_is_db(fp) ((fp)->f_ops == &dma_buf_fileops)
 
-static int dma_buf_close(struct file *fp, struct thread *td)
+static int
+dma_buf_close(struct file *fp, struct thread *td)
 {
 	struct dma_buf *db;
 
@@ -120,12 +121,12 @@ static int dma_buf_close(struct file *fp, struct thread *td)
 	return (0);
 }
 
-
+static int
 #if __FreeBSD_version < 1400037
-static int dma_buf_stat(struct file *fp, struct stat *sb,
+dma_buf_stat(struct file *fp, struct stat *sb,
 	     struct ucred *active_cred __unused, struct thread *td __unused)
 #else
-static int dma_buf_stat(struct file *fp, struct stat *sb,
+dma_buf_stat(struct file *fp, struct stat *sb,
 	     struct ucred *active_cred __unused)
 #endif
 {
@@ -135,7 +136,8 @@ static int dma_buf_stat(struct file *fp, struct stat *sb,
 }
 
 
-static int dma_buf_fill_kinfo(struct file *fp, struct kinfo_file *kif,
+static int
+dma_buf_fill_kinfo(struct file *fp, struct kinfo_file *kif,
 		   struct filedesc *fdp __unused)
 {
 
@@ -143,7 +145,8 @@ static int dma_buf_fill_kinfo(struct file *fp, struct kinfo_file *kif,
 	return (0);
 }
 
-static int dma_buf_mmap_fileops(struct file *fp, vm_map_t map, vm_offset_t *addr,
+static int
+dma_buf_mmap_fileops(struct file *fp, vm_map_t map, vm_offset_t *addr,
 	     vm_size_t size, vm_prot_t prot, vm_prot_t cap_maxprot,
 	     int flags, vm_ooffset_t foff, struct thread *td)
 {
@@ -165,7 +168,8 @@ static int dma_buf_mmap_fileops(struct file *fp, vm_map_t map, vm_offset_t *addr
 	return (-db->ops->mmap(db, &vma));
 }
 
-static int dma_buf_seek(struct file *fp, off_t offset, int whence, struct thread *td)
+static int
+dma_buf_seek(struct file *fp, off_t offset, int whence, struct thread *td)
 {
 	struct dma_buf *db;
 	off_t base;
@@ -189,7 +193,8 @@ static int dma_buf_seek(struct file *fp, off_t offset, int whence, struct thread
 	return (0);
 }
 
-static int dma_buf_poll(struct file *fp, int events,
+static int
+dma_buf_poll(struct file *fp, int events,
 	     struct ucred *active_cred, struct thread *td)
 {
 	// TODO: implement this when we need it (mostly used for cross-device fence sync)
@@ -197,7 +202,8 @@ static int dma_buf_poll(struct file *fp, int events,
 }
 
 
-static int dma_buf_begin_cpu_access(struct dma_buf *db, enum dma_data_direction dir)
+static int
+dma_buf_begin_cpu_access(struct dma_buf *db, enum dma_data_direction dir)
 {
 
 	MPASS(db != NULL);
@@ -206,7 +212,8 @@ static int dma_buf_begin_cpu_access(struct dma_buf *db, enum dma_data_direction 
 	return (0);
 }
 
-static int dma_buf_end_cpu_access(struct dma_buf *db, enum dma_data_direction dir)
+static int
+dma_buf_end_cpu_access(struct dma_buf *db, enum dma_data_direction dir)
 {
 	MPASS(db != NULL);
 	if (db->ops->end_cpu_access)
@@ -214,7 +221,8 @@ static int dma_buf_end_cpu_access(struct dma_buf *db, enum dma_data_direction di
 	return (0);
 }
 
-static int dma_buf_ioctl(struct file *fp, u_long com, void *data,
+static int
+dma_buf_ioctl(struct file *fp, u_long com, void *data,
 	      struct ucred *active_cred, struct thread *td)
 {
 	struct dma_buf *db;
@@ -260,7 +268,8 @@ static int dma_buf_ioctl(struct file *fp, u_long com, void *data,
 }
 
 
-struct dma_buf_attachment *dma_buf_dynamic_attach(struct dma_buf *db, struct device *dev,
+struct dma_buf_attachment *
+dma_buf_dynamic_attach(struct dma_buf *db, struct device *dev,
     const struct dma_buf_attach_ops *iops, void *ipriv)
 {
 	struct dma_buf_attachment *dba;
@@ -321,12 +330,14 @@ struct dma_buf_attachment *dma_buf_dynamic_attach(struct dma_buf *db, struct dev
 	return (dba);
 }
 
-struct dma_buf_attachment *dma_buf_attach(struct dma_buf *db, struct device *dev)
+struct dma_buf_attachment *
+dma_buf_attach(struct dma_buf *db, struct device *dev)
 {
 	return (dma_buf_dynamic_attach(db, dev, NULL, NULL));
 }
 
-void dma_buf_detach(struct dma_buf *db, struct dma_buf_attachment *dba)
+void
+dma_buf_detach(struct dma_buf *db, struct dma_buf_attachment *dba)
 {
 	MPASS(db != NULL);
 	MPASS(dba != NULL);
@@ -352,20 +363,23 @@ void dma_buf_detach(struct dma_buf *db, struct dma_buf_attachment *dba)
 	free(dba, M_DMABUF);
 }
 
-int dma_buf_pin(struct dma_buf_attachment *dba)
+int
+dma_buf_pin(struct dma_buf_attachment *dba)
 {
 	dma_resv_assert_held(dba->dmabuf->resv);
 	return (dba->dmabuf->ops->pin != NULL ? dba->dmabuf->ops->pin(dba) :0);
 }
 
-void dma_buf_unpin(struct dma_buf_attachment *dba)
+void
+dma_buf_unpin(struct dma_buf_attachment *dba)
 {
 	dma_resv_assert_held(dba->dmabuf->resv);
 	if (dba->dmabuf->ops->unpin != NULL)
 		dba->dmabuf->ops->unpin(dba);
 }
 
-struct dma_buf *dma_buf_get(int fd)
+struct dma_buf *
+dma_buf_get(int fd)
 {
 	struct file *fp;
 	int rc;
@@ -381,9 +395,9 @@ struct dma_buf *dma_buf_get(int fd)
 	}
 	return (fp->f_data);
 }
-EXPORT_SYMBOL_GPL(dma_buf_get);
 
-void dma_buf_put(struct dma_buf *db)
+void
+dma_buf_put(struct dma_buf *db)
 {
 
 	MPASS(db != NULL);
@@ -392,7 +406,8 @@ void dma_buf_put(struct dma_buf *db)
 	fdrop(db->linux_file, curthread);
 }
 
-int dma_buf_fd(struct dma_buf *db, int flags)
+int
+dma_buf_fd(struct dma_buf *db, int flags)
 {
 	int err, fd;
 
@@ -409,7 +424,8 @@ int dma_buf_fd(struct dma_buf *db, int flags)
 	return (fd);
 }
 
-struct dma_buf *dma_buf_export(const struct dma_buf_export_info *exp_info)
+struct dma_buf *
+dma_buf_export(const struct dma_buf_export_info *exp_info)
 {
 	const struct dma_buf_ops *ops = exp_info->ops;
 	struct dma_buf *db;
@@ -461,7 +477,8 @@ err:
 	return (ERR_PTR(-err));
 }
 
-struct sg_table *dma_buf_map_attachment(struct dma_buf_attachment *dba, enum dma_data_direction dir)
+struct sg_table *
+dma_buf_map_attachment(struct dma_buf_attachment *dba, enum dma_data_direction dir)
 {
 	struct sg_table *sgt;
 	int rc;
@@ -507,7 +524,8 @@ struct sg_table *dma_buf_map_attachment(struct dma_buf_attachment *dba, enum dma
 	return (sgt);
 }
 
-void dma_buf_unmap_attachment(struct dma_buf_attachment *dba,
+void
+dma_buf_unmap_attachment(struct dma_buf_attachment *dba,
 			 struct sg_table *sg_table,
 			 enum dma_data_direction dir)
 {
@@ -533,7 +551,8 @@ void dma_buf_unmap_attachment(struct dma_buf_attachment *dba,
 #endif
 }
 
-void dma_buf_move_notify(struct dma_buf *db)
+void
+dma_buf_move_notify(struct dma_buf *db)
 {
 	struct dma_buf_attachment *dba;
 
@@ -545,7 +564,8 @@ void dma_buf_move_notify(struct dma_buf *db)
 			dba->importer_ops->move_notify(dba);
 }
 
-void *dma_buf_vmap(struct dma_buf *dmabuf)
+void *
+dma_buf_vmap(struct dma_buf *dmabuf)
 {
 	void *ptr;
 
@@ -597,13 +617,15 @@ void dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
 	mutex_unlock(&dmabuf->lock);
 }
 
-static void dma_buf_init(void *arg __unused)
+static void
+dma_buf_init(void *arg __unused)
 {
 	sx_init(&db_list.lock, "db_list_lock");
 	INIT_LIST_HEAD(&db_list.head);
 }
 
-static void dma_buf_uninit(void *arg __unused)
+static void
+dma_buf_uninit(void *arg __unused)
 {
 	sx_destroy(&db_list.lock);
 }
