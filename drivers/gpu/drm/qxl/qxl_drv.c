@@ -335,7 +335,6 @@ LKPI_DRIVER_MODULE(qxl, qxl_init, qxl_exit);
 LKPI_PNP_INFO(pci, qxl, pciidlist);
 MODULE_DEPEND(qxl, drmn, 2, 2, 2);
 MODULE_DEPEND(qxl, ttm, 1, 1, 1);
-MODULE_DEPEND(qxl, agp, 1, 1, 1);
 MODULE_DEPEND(qxl, linuxkpi, 1, 1, 1);
 MODULE_DEPEND(qxl, linuxkpi_gplv2, 1, 1, 1);
 MODULE_DEPEND(qxl, dmabuf, 1, 1, 1);
