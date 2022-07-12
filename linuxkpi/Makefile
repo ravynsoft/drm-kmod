@@ -7,7 +7,8 @@ KMOD=	linuxkpi_gplv2
 SRCS=	linux_kmod_gplv2.c	\
 	linux_compat.c		\
 	linux_hdmi.c		\
-	linux_i2c.c
+	linux_i2c.c			\
+	linux_virtio.c
 
 .if ${MACHINE_CPUARCH} == "amd64" || ${MACHINE_CPUARCH} == "i386" || ${MACHINE_CPUARCH} == "aarch64"
 SRCS+=	opt_acpi.h
