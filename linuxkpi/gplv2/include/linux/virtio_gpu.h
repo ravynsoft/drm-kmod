@@ -35,8 +35,8 @@
  * SUCH DAMAGE.
  */
 
-#ifndef VIRTIO_GPU_HW_H
-#define VIRTIO_GPU_HW_H
+#ifndef __LKPI_LINUX_VIRTIO_GPU_H
+#define __LKPI_LINUX_VIRTIO_GPU_H
 
 #include <linux/types.h>
 
