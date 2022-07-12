@@ -3,7 +3,7 @@
 SYSDIR?=/usr/src/sys
 .include "${SYSDIR}/conf/kern.opts.mk"
 
-_VALID_KMODS=	dmabuf linuxkpi ttm drm dummygfx qxl
+_VALID_KMODS=	dmabuf linuxkpi ttm drm dummygfx virtio-gpu
 
 SUPPORTED_ARCH=	amd64 \
 		i386 \
@@ -24,7 +24,7 @@ DEFAULT_KMODS=	dmabuf		\
 	
 
 .if ${MACHINE_ARCH} == "amd64" || ${MACHINE_ARCH} == "i386"
-DEFAULT_KMODS+=	qxl
+DEFAULT_KMODS+=	virtio-gpu
 .endif
 
 .if defined(DUMMYGFX)
