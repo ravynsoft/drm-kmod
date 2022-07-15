@@ -104,7 +104,8 @@ linux_virtqueue_num_free(struct linux_virtqueue *vq)
 bool
 linux_virtqueue_kick(struct linux_virtqueue *vq)
 {
-    return (virtqueue_notify(linux_to_bsd_virtqueue(vq)));
+    virtqueue_notify(linux_to_bsd_virtqueue(vq)));
+    return 0
 }
 
 bool

@@ -52,6 +52,8 @@ SRCS	+=			\
 	pci_iov_if.h		\
 	vnode_if.h
 
+SRCS+=	virtio_if.c virtio_if.h
+
 # Lots of these, probably not worth fixing
 CWARNFLAGS+=	-Wno-pointer-arith -Wno-pointer-sign -Wno-error=format
 
