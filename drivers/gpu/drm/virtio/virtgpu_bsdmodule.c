@@ -100,12 +100,14 @@ vtgpu_modevent(module_t mod, int type, void *unused)
 	return (error);
 }
 
-static driver_t vtgpu_driver = { "vtgpu", vtgpu_methods,
-	sizeof(struct vtgpu_softc) };
-static devclass_t vtgpu_devclass;
+static driver_t vtgpu_driver = {
+        "vtgpu",
+        vtgpu_methods,
+	    sizeof(struct vtgpu_softc)
+};
 
-VIRTIO_DRIVER_MODULE(virtio_gpu, vtgpu_driver, vtgpu_devclass, vtgpu_modevent,
-    0);
+
+VIRTIO_DRIVER_MODULE(virtio_gpu, vtgpu_driver, vtgpu_modevent, NULL);
 MODULE_VERSION(virtio_gpu, 1);
 VIRTIO_SIMPLE_PNPINFO(virtio_gpu, VIRTIO_ID_GPU, "Virtio GPU driver");
 
@@ -114,7 +116,6 @@ MODULE_DEPEND(virtio_gpu, drmn, 2, 2, 2);
 MODULE_DEPEND(virtio_gpu, ttm, 1, 1, 1);
 MODULE_DEPEND(virtio_gpu, agp, 1, 1, 1);
 MODULE_DEPEND(virtio_gpu, virtio, 1, 1, 1);
-MODULE_DEPEND(virtio_gpu, linuxkpi, 1, 1, 1);
 /* TODO: linuxkpi_gplv2 should not be needed. */
 MODULE_DEPEND(virtio_gpu, linuxkpi_gplv2, 1, 1, 1);
 MODULE_DEPEND(virtio_gpu, debugfs, 1, 1, 1);
