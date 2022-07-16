@@ -39,8 +39,8 @@ static void virtio_gpu_config_changed_work_func(struct work_struct *work)
 	u32 events_read, events_clear = 0;
 
 	/* read the config space */
-	virtio_cread_le(vgdev->vdev, struct virtio_gpu_config,
-			events_read, &events_read);
+	virtio_cread(vgdev->vdev, struct virtio_gpu_config,
+		     events_read, &events_read);
 	if (events_read & VIRTIO_GPU_EVENT_DISPLAY) {
 		if (vgdev->has_edid)
 			virtio_gpu_cmd_get_edids(vgdev);
@@ -49,8 +49,8 @@ static void virtio_gpu_config_changed_work_func(struct work_struct *work)
 		drm_helper_hpd_irq_event(vgdev->ddev);
 		events_clear |= VIRTIO_GPU_EVENT_DISPLAY;
 	}
-	virtio_cwrite_le(vgdev->vdev, struct virtio_gpu_config,
-			 events_clear, &events_clear);
+	virtio_cwrite(vgdev->vdev, struct virtio_gpu_config,
+		      events_clear, &events_clear);
 }
 
 static void virtio_gpu_init_vq(struct virtio_gpu_queue *vgvq,
@@ -171,8 +171,8 @@ int virtio_gpu_init(struct drm_device *dev)
 	}
 
 	/* get display info */
-	virtio_cread_le(vgdev->vdev, struct virtio_gpu_config,
-			num_scanouts, &num_scanouts);
+	virtio_cread(vgdev->vdev, struct virtio_gpu_config,
+		     num_scanouts, &num_scanouts);
 	vgdev->num_scanouts = min_t(uint32_t, num_scanouts,
 				    VIRTIO_GPU_MAX_SCANOUTS);
 	if (!vgdev->num_scanouts) {
@@ -182,8 +182,8 @@ int virtio_gpu_init(struct drm_device *dev)
 	}
 	DRM_INFO("number of scanouts: %d\n", num_scanouts);
 
-	virtio_cread_le(vgdev->vdev, struct virtio_gpu_config,
-			num_capsets, &num_capsets);
+	virtio_cread(vgdev->vdev, struct virtio_gpu_config,
+		     num_capsets, &num_capsets);
 	DRM_INFO("number of cap sets: %d\n", num_capsets);
 
 	ret = virtio_gpu_modeset_init(vgdev);
@@ -207,7 +207,11 @@ int virtio_gpu_init(struct drm_device *dev)
 err_scanouts:
 	virtio_gpu_free_vbufs(vgdev);
 err_vbufs:
+#ifdef __FreeBSD__
+	virtio_del_vqs(vgdev->vdev);
+#else
 	vgdev->vdev->config->del_vqs(vgdev->vdev);
+#endif
 err_vqs:
 	kfree(vgdev);
 	return ret;
@@ -231,8 +235,13 @@ void virtio_gpu_deinit(struct drm_device *dev)
 	flush_work(&vgdev->ctrlq.dequeue_work);
 	flush_work(&vgdev->cursorq.dequeue_work);
 	flush_work(&vgdev->config_changed_work);
+#ifdef __FreeBSD__
+	virtio_del_vqs(vgdev->vdev);
+	virtio_reset(vgdev->vdev);
+#else
 	vgdev->vdev->config->reset(vgdev->vdev);
 	vgdev->vdev->config->del_vqs(vgdev->vdev);
+#endif
 }
 
 void virtio_gpu_release(struct drm_device *dev)

@@ -32,3 +32,6 @@
  * just forward to that one.
  */
 #include <dev/virtio/virtio_ring.h>
+
+/* We support indirect buffer descriptors */
+#define VIRTIO_RING_F_INDIRECT_DESC	28

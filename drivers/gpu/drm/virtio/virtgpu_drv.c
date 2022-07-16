@@ -37,6 +37,12 @@
 
 #include "virtgpu_drv.h"
 
+#ifdef __FreeBSD__
+SYSCTL_NODE(_hw, OID_AUTO, virtio_gpu,
+    CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
+    DRIVER_DESC " parameters");
+#endif
+
 static struct drm_driver driver;
 
 static int virtio_gpu_modeset = -1;
@@ -116,6 +122,9 @@ static int virtio_gpu_probe(struct virtio_device *vdev)
 		if (ret)
 			goto err_free;
 	}
+#else
+#pragma message("TODO: figure out how to handle vdev->dev.parent->bus")
+#endif
 
 	ret = virtio_gpu_init(dev);
 	if (ret)
@@ -150,7 +159,7 @@ static void virtio_gpu_config_changed(struct virtio_device *vdev)
 
 	schedule_work(&vgdev->config_changed_work);
 }
-
+#ifdef __linux__
 static struct virtio_device_id id_table[] = {
 	{ VIRTIO_ID_GPU, VIRTIO_DEV_ANY_ID },
 	{ 0 },
@@ -187,7 +196,7 @@ MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Dave Airlie <airlied@redhat.com>");
 MODULE_AUTHOR("Gerd Hoffmann <kraxel@redhat.com>");
 MODULE_AUTHOR("Alon Levy");
-
+#endif
 DEFINE_DRM_GEM_FOPS(virtio_gpu_driver_fops);
 
 static struct drm_driver driver = {
