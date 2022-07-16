@@ -28,7 +28,7 @@
 #include "virtgpu_drv.h"
 
 static int virtgpu_virtio_get_uuid(struct dma_buf *buf,
-				   uuid_t *uuid)
+                                   uint64_t *uuid)
 {
 	struct drm_gem_object *obj = buf->priv;
 	struct virtio_gpu_object *bo = gem_to_virtio_gpu_obj(obj);
