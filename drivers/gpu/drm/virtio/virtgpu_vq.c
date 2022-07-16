@@ -474,7 +474,11 @@ retry:
 	ret = virtqueue_add_sgs(vq, sgs, outcnt, 0, vbuf, GFP_ATOMIC);
 	if (ret == -ENOSPC) {
 		spin_unlock(&vgdev->cursorq.qlock);
+#ifdef __FreeBSD__
+		wait_event(vgdev->cursorq.ack_queue, virtqueue_num_free(vq) >= outcnt);
+#else
 		wait_event(vgdev->cursorq.ack_queue, vq->num_free >= outcnt);
+#endif
 		spin_lock(&vgdev->cursorq.qlock);
 		goto retry;
 	} else {

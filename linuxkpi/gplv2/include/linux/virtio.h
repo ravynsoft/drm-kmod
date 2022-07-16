@@ -45,6 +45,7 @@ struct bsd_virtqueue;
 struct linux_virtqueue {
     struct linux_virtio_device *vdev;
     struct bsd_virtqueue *bsdq;
+    unsigned int num_free;
     void *priv;
 };
 
