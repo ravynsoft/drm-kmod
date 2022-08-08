@@ -651,6 +651,7 @@ out_unlock:
 static const struct fb_ops vmw_fb_ops = {
 	.owner = THIS_MODULE,
 	DRM_FB_HELPER_DEFAULT_OPS,
+    .fb_set_par = vmw_fb_set_par,
 #ifdef __linux__
 	.fb_check_var = vmw_fb_check_var,
 	.fb_set_par = vmw_fb_set_par,

@@ -91,4 +91,5 @@ CWARNFLAGS.vmwgfx_kms.c= -Wno-missing-prototypes
 CWARNFLAGS.vmwgfx_msg.c= -Wno-missing-prototypes
 CWARNFLAGS.vmwgfx_overlay.c= -Wno-unused-function
 CWARNFLAGS.vmwgfx_stdu.c= -Wno-cast-qual
+CWARNFLAGS.vmwgfx_fb.c=	-Wno-initializer-overrides
 
