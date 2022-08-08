@@ -672,9 +672,7 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	unsigned int fb_bpp, fb_pitch, fb_size;
 	struct drm_display_mode *init_mode;
 	int ret;
-
 	fb_bpp = 32;
-
 	/* XXX As shouldn't these be as well. */
 	fb_width = min(vmw_priv->fb_max_width, (unsigned)2048);
 	fb_height = min(vmw_priv->fb_max_height, (unsigned)2048);
@@ -704,8 +702,9 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	if (ret)
 		goto err_kms;
 
-	info->var.xres = init_mode->hdisplay;
-	info->var.yres = init_mode->vdisplay;
+    info->pseudo_palette = par->pseudo_palette;
+	info->var.xres = fb_width;
+	info->var.yres = fb_height;
 
 	/*
 	 * Create buffers and alloc memory
@@ -719,45 +718,18 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	/*
 	 * Fixed and var
 	 */
-#ifdef __linux__
-	strcpy(info->fix.id, "svgadrmfb");
-	info->fix.type = FB_TYPE_PACKED_PIXELS;
-	info->fix.visual = FB_VISUAL_TRUECOLOR;
-	info->fix.type_aux = 0;
-	info->fix.xpanstep = 1; /* doing it in hw */
-	info->fix.ypanstep = 1; /* doing it in hw */
-	info->fix.ywrapstep = 0;
-	info->fix.accel = FB_ACCEL_NONE;
-#endif
-	info->fix.line_length = fb_pitch;
 
+	info->fix.line_length = fb_pitch;
 	info->fix.smem_start = 0;
 	info->fix.smem_len = fb_size;
-
-	info->pseudo_palette = par->pseudo_palette;
 	info->screen_base = (char __iomem *)par->vmalloc;
 	info->screen_size = fb_size;
 
 	info->fbops = &vmw_fb_ops;
 
-#ifdef __linux__
-	/* 24 depth per default */
-	info->var.red.offset = 16;
-	info->var.green.offset = 8;
-	info->var.blue.offset = 0;
-	info->var.red.length = 8;
-	info->var.green.length = 8;
-	info->var.blue.length = 8;
-	info->var.transp.offset = 0;
-	info->var.transp.length = 0;
-#endif
-
-	info->var.xres_virtual = fb_width;
-	info->var.yres_virtual = fb_height;
 	info->var.bits_per_pixel = fb_bpp;
-	info->var.xoffset = 0;
-	info->var.yoffset = 0;
-	info->var.activate = FB_ACTIVATE_NOW;
+
+
 	info->var.height = -1;
 	info->var.width = -1;
 
@@ -772,12 +744,13 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 
 #ifdef __FreeBSD__
 	/* Save values for BSD */
+    info->fbio.fb_name = device_get_nameunit(device->bsddev);
 	info->fbio.fb_width = fb_width;
 	info->fbio.fb_height = fb_height;
-	info->fbio.fb_stride = fb_pitch;
+	//info->fbio.fb_stride = fb_pitch;
 	info->fbio.fb_bpp = fb_bpp;
-	info->fbio.fb_depth = info->var.bits_per_pixel;
-	info->fbio.fb_name = device_get_nameunit(device->bsddev);
+	//info->fbio.fb_depth = info->var.bits_per_pixel;
+
 	info->fbio.fb_video_dev = device_get_parent(device->bsddev);
 	info->fb_bsddev = device->bsddev;
 	/* struct vt_kms_softc *sc = (struct vt_kms_softc *)info->fbio.fb_priv; */
@@ -793,10 +766,7 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	par->dirty.active = true;
 	spin_lock_init(&par->dirty.lock);
 	mutex_init(&par->bo_mutex);
-#ifdef __linux__
-	info->fbdefio = &vmw_defio;
-	fb_deferred_io_init(info);
-#endif
+
 
 	ret = register_framebuffer(info);
 	if (unlikely(ret != 0))
