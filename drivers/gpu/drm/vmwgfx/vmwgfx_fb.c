@@ -37,7 +37,6 @@
 
 #ifdef __FreeBSD__
 #include <dev/vt/vt.h>
-#include "vmwgfx_fb_freebsd.h"
 #include <drm/drm_fb_helper.h>
 #define	fb_info linux_fb_info
 #if 1
