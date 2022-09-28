@@ -41,6 +41,10 @@
 #include "radeon.h"
 #include "radeon_asic.h"
 
+#ifdef __FreeBSD__
+#include <vm/vm_phys.h>
+#endif
+
 #if defined(CONFIG_VGA_SWITCHEROO)
 bool radeon_has_atpx(void);
 #else
@@ -78,12 +82,17 @@ void radeon_driver_unload_kms(struct drm_device *dev)
 	radeon_modeset_fini(rdev);
 	radeon_device_fini(rdev);
 
-#ifdef CONFIG_AGP
 	if (dev->agp)
+#ifdef __linux__
 		arch_phys_wc_del(dev->agp->agp_mtrr);
+#elif defined(__FreeBSD__)
+		vm_phys_fictitious_unreg_range(
+			dev->agp->agp_info.aper_base,
+			dev->agp->agp_info.aper_base +
+			(dev->agp->agp_info.aper_size << 20));
+#endif
 	kfree(dev->agp);
 	dev->agp = NULL;
-#endif
 
 done_free:
 	kfree(rdev);

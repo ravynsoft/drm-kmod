@@ -35,11 +35,13 @@
 #include "drm_internal.h"
 #include "drm_legacy.h"
 
+#ifdef __FreeBSD__
+#include <vm/vm_phys.h>
+#endif
+
+#ifdef CONFIG_DRM_LEGACY
 
 #ifdef __FreeBSD__
-#define aper_base ai_aperture_base
-#define aper_size ai_aperture_size
-
 static void
 drm_pci_busdma_callback(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 {
@@ -52,8 +54,6 @@ drm_pci_busdma_callback(void *arg, bus_dma_segment_t *segs, int nsegs, int error
 	dmah->busaddr = segs[0].ds_addr;
 }
 #endif
-
-#ifdef CONFIG_DRM_LEGACY
 
 /**
  * drm_pci_alloc - Allocate a PCI consistent memory block, for DMA.
@@ -265,17 +265,22 @@ drm_getpciinfo(struct drm_device *dev, void *data, struct drm_file *file_priv)
 }
 #endif
 
-#ifdef CONFIG_AGP
 void drm_pci_agp_destroy(struct drm_device *dev)
 {
 	if (dev->agp) {
+#ifdef __linux__
 		arch_phys_wc_del(dev->agp->agp_mtrr);
+#elif defined(__FreeBSD__)
+		vm_phys_fictitious_unreg_range(
+			dev->agp->agp_info.aper_base,
+			dev->agp->agp_info.aper_base +
+			(dev->agp->agp_info.aper_size << 20));
+#endif
 		drm_legacy_agp_clear(dev);
 		kfree(dev->agp);
 		dev->agp = NULL;
 	}
 }
-#endif
 
 #ifdef CONFIG_DRM_LEGACY
 
@@ -285,10 +290,18 @@ static void drm_pci_agp_init(struct drm_device *dev)
 		if (pci_find_capability(dev->pdev, PCI_CAP_ID_AGP))
 			dev->agp = drm_agp_init(dev);
 		if (dev->agp) {
+#ifdef __linux__
 			dev->agp->agp_mtrr = arch_phys_wc_add(
 				dev->agp->agp_info.aper_base,
 				dev->agp->agp_info.aper_size *
 				1024 * 1024);
+#elif defined(__FreeBSD__)
+			vm_phys_fictitious_reg_range(
+				dev->agp->agp_info.aper_base,
+				dev->agp->agp_info.aper_base +
+				(dev->agp->agp_info.aper_size << 20),
+				VM_MEMATTR_WRITE_COMBINING);
+#endif
 		}
 	}
 }
