@@ -84,7 +84,7 @@ struct drm_printer;
 	param(bool, verbose_state_checks, true, 0) \
 	param(bool, nuclear_pageflip, false, 0400) \
 	param(bool, enable_dp_mst, true, 0600) \
-	param(bool, enable_gvt, false, 0400)
+	param(bool, enable_gvt, true, 0400)
 
 #define MEMBER(T, member, ...) T member;
 struct i915_params {

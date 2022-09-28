@@ -35,6 +35,11 @@
 #include <drm/ttm/ttm_module.h>
 #include <drm/drm_sysfs.h>
 
+#ifdef __FreeBSD__
+#include <linux/completion.h>
+#include <linux/wait.h>
+#endif
+
 static DECLARE_WAIT_QUEUE_HEAD(exit_q);
 static atomic_t device_released;
 
@@ -105,6 +110,9 @@ MODULE_LICENSE("GPL and additional rights");
 #elif defined(__FreeBSD__)
 LKPI_DRIVER_MODULE(ttm, ttm_init, ttm_exit);
 MODULE_VERSION(ttm, 1);
+#ifdef CONFIG_AGP
+MODULE_DEPEND(ttm, agp, 1, 1, 1);
+#endif
 MODULE_DEPEND(ttm, drmn, 2, 2, 2);
 MODULE_DEPEND(ttm, linuxkpi, 1, 1, 1);
 MODULE_DEPEND(ttm, linuxkpi_gplv2, 1, 1, 1);
