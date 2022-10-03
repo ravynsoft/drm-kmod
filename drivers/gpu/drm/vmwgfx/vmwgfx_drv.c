@@ -25,6 +25,12 @@
  *
  **************************************************************************/
 
+#include <linux/compat.h>
+#include <linux/console.h>
+#include <linux/module.h>
+#include <linux/pm_runtime.h>
+#include <linux/vga_switcheroo.h>
+#include <linux/mmu_notifier.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
 #include <linux/pci.h>
@@ -60,6 +66,15 @@
 
 #define VMW_MIN_INITIAL_WIDTH 800
 #define VMW_MIN_INITIAL_HEIGHT 600
+
+#ifdef __FreeBSD__
+#define PCI_VENDOR_ID_VMWARE		0x15ad
+#include <vm/vm_phys.h>
+
+SYSCTL_NODE(_hw, OID_AUTO, vmwgfx,
+    CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
+    VMWGFX_DRIVER_DESC " parameters");
+#endif
 
 /*
  * Fully encoded drm commands. Might move to vmw_drm.h
@@ -554,10 +569,12 @@ out_no_query_bo:
 	if (dev_priv->cman)
 		vmw_cmdbuf_remove_pool(dev_priv->cman);
 	if (dev_priv->has_mob) {
+#ifdef __linux__
 		struct ttm_resource_manager *man;
 
 		man = ttm_manager_type(&dev_priv->bdev, VMW_PL_MOB);
 		ttm_resource_manager_evict_all(&dev_priv->bdev, man);
+#endif
 		vmw_otables_takedown(dev_priv);
 	}
 	if (dev_priv->cman)
@@ -590,10 +607,12 @@ static void vmw_release_device_early(struct vmw_private *dev_priv)
 		vmw_cmdbuf_remove_pool(dev_priv->cman);
 
 	if (dev_priv->has_mob) {
+#ifdef __linux__
 		struct ttm_resource_manager *man;
 
 		man = ttm_manager_type(&dev_priv->bdev, VMW_PL_MOB);
 		ttm_resource_manager_evict_all(&dev_priv->bdev, man);
+#endif
 		vmw_otables_takedown(dev_priv);
 	}
 }
@@ -670,8 +689,10 @@ static int vmw_dma_select_mode(struct vmw_private *dev_priv)
 		[vmw_dma_map_bind] = "Giving up DMA mappings early."};
 
 	/* TTM currently doesn't fully support SEV encryption. */
+#ifdef __linux__
 	if (cc_platform_has(CC_ATTR_MEM_ENCRYPT))
 		return -EINVAL;
+#endif
 
 	if (vmw_force_coherent)
 		dev_priv->map_mode = vmw_dma_alloc_coherent;
@@ -746,11 +767,15 @@ static int vmw_setup_pci_resources(struct vmw_private *dev,
 		dev->vram_size = pci_resource_len(pdev, 2);
 
 		drm_info(&dev->drm,
-			"Register MMIO at 0x%pa size is %llu kiB\n",
+			"Register MMIO at 0x%pa size is %lu kiB\n",
 			 &rmmio_start, (uint64_t)rmmio_size / 1024);
+#ifdef __linux__
 		dev->rmmio = devm_ioremap(dev->drm.dev,
+#elif defined(__FreeBSD__)
+		dev->rmmio = ioremap_wc(
 					  rmmio_start,
 					  rmmio_size);
+#endif
 		if (!dev->rmmio) {
 			drm_err(&dev->drm,
 				"Failed mapping registers mmio memory.\n");
@@ -765,9 +790,13 @@ static int vmw_setup_pci_resources(struct vmw_private *dev,
 		fifo_size = pci_resource_len(pdev, 2);
 
 		drm_info(&dev->drm,
-			 "FIFO at %pa size is %llu kiB\n",
+			 "FIFO at %pa size is %lu kiB\n",
 			 &fifo_start, (uint64_t)fifo_size / 1024);
+#ifdef __linux__
 		dev->fifo_mem = devm_memremap(dev->drm.dev,
+#elif defined(__FreeBSD__)
+		dev->fifo_mem = memremap(
+#endif
 					      fifo_start,
 					      fifo_size,
 					      MEMREMAP_WB);
@@ -790,7 +819,7 @@ static int vmw_setup_pci_resources(struct vmw_private *dev,
 	 * SVGA_REG_VRAM_SIZE.
 	 */
 	drm_info(&dev->drm,
-		 "VRAM at %pa size is %llu kiB\n",
+		 "VRAM at %pa size is %lu kiB\n",
 		 &dev->vram_start, (uint64_t)dev->vram_size / 1024);
 
 	return 0;
@@ -943,7 +972,7 @@ static int vmw_driver_load(struct vmw_private *dev_priv, u32 pci_id)
 		dev_priv->max_primary_mem = dev_priv->vram_size;
 	}
 	drm_info(&dev_priv->drm,
-		 "Legacy memory limits: VRAM = %llu kB, FIFO = %llu kB, surface = %u kB\n",
+		 "Legacy memory limits: VRAM = %lu kB, FIFO = %lu kB, surface = %u kB\n",
 		 (u64)dev_priv->vram_size / 1024,
 		 (u64)dev_priv->fifo_mem_size / 1024,
 		 dev_priv->memory_size / 1024);
@@ -967,7 +996,7 @@ static int vmw_driver_load(struct vmw_private *dev_priv, u32 pci_id)
 			 (unsigned)dev_priv->max_gmr_pages);
 	}
 	drm_info(&dev_priv->drm,
-		 "Maximum display memory size is %llu kiB\n",
+		 "Maximum display memory size is %lu kiB\n",
 		 (uint64_t)dev_priv->max_primary_mem / 1024);
 
 	/* Need mmio memory to check for fifo pitchlock cap. */
@@ -1132,7 +1161,9 @@ out_no_kms:
 	vmw_devcaps_destroy(dev_priv);
 	vmw_vram_manager_fini(dev_priv);
 out_no_vram:
+#ifdef __linux__
 	ttm_device_fini(&dev_priv->bdev);
+#endif
 out_no_bdev:
 	vmw_fence_manager_takedown(dev_priv->fman);
 out_no_fman:
@@ -1182,7 +1213,9 @@ static void vmw_driver_unload(struct drm_device *dev)
 	}
 	vmw_devcaps_destroy(dev_priv);
 	vmw_vram_manager_fini(dev_priv);
+#ifdef __linux__
 	ttm_device_fini(&dev_priv->bdev);
+#endif
 	vmw_release_device_late(dev_priv);
 	vmw_fence_manager_takedown(dev_priv->fman);
 	if (dev_priv->capabilities & SVGA_CAP_IRQMASK)
@@ -1380,8 +1413,10 @@ void vmw_svga_disable(struct vmw_private *dev_priv)
 	 */
 	vmw_kms_lost_device(&dev_priv->drm);
 	if (ttm_resource_manager_used(man)) {
+#ifdef __linux__
 		if (ttm_resource_manager_evict_all(&dev_priv->bdev, man))
 			DRM_ERROR("Failed evicting VRAM buffers.\n");
+#endif
 		ttm_resource_manager_set_used(man, false);
 		vmw_write(dev_priv, SVGA_REG_ENABLE,
 			  SVGA_REG_ENABLE_HIDE |
