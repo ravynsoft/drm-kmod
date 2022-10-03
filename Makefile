@@ -26,7 +26,7 @@ DEFAULT_KMODS=	dmabuf		\
                 i915
 
 .if ${MACHINE_ARCH} == "amd64" || ${MACHINE_ARCH} == "i386"
-#DEFAULT_KMODS+=	vmwgfx
+DEFAULT_KMODS+=	vmwgfx
 .endif
 
 .if defined(DUMMYGFX)

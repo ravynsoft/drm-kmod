@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 OR MIT */
 /**************************************************************************
  *
- * Copyright 2009-2014 VMware, Inc., Palo Alto, CA., USA
+ * Copyright 2021 VMware, Inc., Palo Alto, CA., USA
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -25,27 +25,26 @@
  *
  **************************************************************************/
 
-/**
- * This file contains virtual hardware defines for kernel space.
- */
+#ifndef _VMWGFX_DEVCAPS_H_
+#define _VMWGFX_DEVCAPS_H_
 
-#ifndef _VMWGFX_REG_H_
-#define _VMWGFX_REG_H_
+#include "vmwgfx_drv.h"
 
-#include <linux/types.h>
+#include "device_include/svga_reg.h"
 
-struct svga_guest_mem_descriptor {
-	u32 ppn;
-	u32 num_pages;
-};
+int vmw_devcaps_create(struct vmw_private *vmw);
+void vmw_devcaps_destroy(struct vmw_private *vmw);
+uint32_t vmw_devcaps_size(const struct vmw_private *vmw, bool gb_aware);
+int vmw_devcaps_copy(struct vmw_private *vmw, bool gb_aware,
+		     void *dst, uint32_t dst_size);
 
-struct svga_fifo_cmd_fence {
-	u32 fence;
-};
-
-#define SVGA_SYNC_GENERIC         1
-#define SVGA_SYNC_FIFOFULL        2
-
-#include "device_include/svga3d_reg.h"
+static inline uint32_t vmw_devcap_get(struct vmw_private *vmw,
+				      uint32_t devcap)
+{
+	bool gb_objects = !!(vmw->capabilities & SVGA_CAP_GBOBJECTS);
+	if (gb_objects)
+		return vmw->devcaps[devcap];
+	return 0;
+}
 
 #endif
