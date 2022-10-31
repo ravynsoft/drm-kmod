@@ -269,7 +269,11 @@ vm_fault_t ttm_bo_vm_fault_reserved(struct vm_fault *vmf,
 		 * at arbitrary times while the data is mmap'ed.
 		 * See vmf_insert_mixed_prot() for a discussion.
 		 */
-		ret = vmf_insert_pfn_prot(vma, address, pfn, prot);
+#ifdef __linux__
+        ret = vmf_insert_pfn_prot(vma, address, pfn, prot);
+#elif defined(__FreeBSD__)
+        ret = lkpi_vmf_insert_pfn_prot_locked(vma, address, pfn, prot);
+#endif
 
 		/* Never error on prefaulted PTEs */
 		if (unlikely((ret & VM_FAULT_ERROR))) {
@@ -318,7 +322,11 @@ vm_fault_t ttm_bo_vm_dummy_page(struct vm_fault *vmf, pgprot_t prot)
 	/* Prefault the entire VMA range right away to avoid further faults */
 	for (address = vma->vm_start; address < vma->vm_end;
 	     address += PAGE_SIZE)
-		ret = vmf_insert_pfn_prot(vma, address, pfn, prot);
+#ifdef __linux__
+        ret = vmf_insert_pfn_prot(vma, address, pfn, prot);
+#elif defined(__FreeBSD__)
+        ret = lkpi_vmf_insert_pfn_prot_locked(vma, address, pfn, prot);
+#endif
 
 	return ret;
 }
@@ -357,7 +365,9 @@ void ttm_bo_vm_open(struct vm_area_struct *vma)
 {
 	struct ttm_buffer_object *bo = vma->vm_private_data;
 
+#ifdef __linux__
 	WARN_ON(bo->bdev->dev_mapping != vma->vm_file->f_mapping);
+#endif
 
 	ttm_bo_get(bo);
 }
@@ -457,16 +467,17 @@ static const struct vm_operations_struct ttm_bo_vm_ops = {
 int ttm_bo_mmap_obj(struct vm_area_struct *vma, struct ttm_buffer_object *bo)
 {
 	/* Enforce no COW since would have really strange behavior with it. */
+#ifdef __linux__
 	if (is_cow_mapping(vma->vm_flags))
 		return -EINVAL;
-
+#endif
 	ttm_bo_get(bo);
 
-	return bo;
-}
-
-static void ttm_bo_mmap_vma_setup(struct ttm_buffer_object *bo, struct vm_area_struct *vma)
-{
+	/*
+	 * Drivers may want to override the vm_ops field. Otherwise we
+	 * use TTM's default callbacks.
+	 */
+	if (!vma->vm_ops)
 	vma->vm_ops = &ttm_bo_vm_ops;
 
 	/*

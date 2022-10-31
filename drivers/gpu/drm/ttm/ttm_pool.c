@@ -43,6 +43,9 @@
 #include <drm/ttm/ttm_pool.h>
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_tt.h>
+#ifdef __FreeBSD__
+#include <drm/ttm/ttm_sysctl_freebsd.h>
+#endif
 
 #include "ttm_module.h"
 
@@ -93,11 +96,14 @@ static struct page *ttm_pool_alloc_page(struct ttm_pool *pool, gfp_t gfp_flags,
 
 	if (!pool->use_dma_alloc) {
 		p = alloc_pages(gfp_flags, order);
+#ifdef __linux__
 		if (p)
 			p->private = order;
+#endif
 		return p;
 	}
 
+#ifdef __linux__
 	dma = kmalloc(sizeof(*dma), GFP_KERNEL);
 	if (!dma)
 		return NULL;
@@ -121,6 +127,10 @@ static struct page *ttm_pool_alloc_page(struct ttm_pool *pool, gfp_t gfp_flags,
 	dma->vaddr = (unsigned long)vaddr | order;
 	p->private = (unsigned long)dma;
 	return p;
+#elif defined(__FreeBSD__)
+    dma = NULL;
+	panic("ttm_pool.c: use_dma_alloc not implemented");
+#endif
 
 error_free:
 	kfree(dma);
@@ -151,11 +161,13 @@ static void ttm_pool_free_page(struct ttm_pool *pool, enum ttm_caching caching,
 	if (order)
 		attr |= DMA_ATTR_NO_WARN;
 
+#ifdef __linux__
 	dma = (void *)p->private;
 	vaddr = (void *)(dma->vaddr & PAGE_MASK);
 	dma_free_attrs(pool->dev, (1UL << order) * PAGE_SIZE, vaddr, dma->addr,
 		       attr);
 	kfree(dma);
+#endif
 }
 
 /* Apply a new caching to an array of pages */
@@ -188,7 +200,12 @@ static int ttm_pool_map(struct ttm_pool *pool, unsigned int order,
 	unsigned int i;
 
 	if (pool->use_dma_alloc) {
+
+#ifdef __linux__
 		struct ttm_pool_dma *dma = (void *)p->private;
+#elif defined(__FreeBSD__)
+        struct ttm_pool_dma *dma = NULL;
+#endif
 
 		addr = dma->addr;
 	} else {
@@ -225,14 +242,22 @@ static void ttm_pool_type_give(struct ttm_pool_type *pt, struct page *p)
 	unsigned int i, num_pages = 1 << pt->order;
 
 	for (i = 0; i < num_pages; ++i) {
+#ifdef __linux__
 		if (PageHighMem(p))
 			clear_highpage(p + i);
 		else
 			clear_page(page_address(p + i));
+#elif defined(__FreeBSD__)
+        pmap_zero_page(p + i);
+#endif
 	}
 
 	spin_lock(&pt->lock);
-	list_add(&p->lru, &pt->pages);
+#ifdef __linux__
+    list_add(&p->lru, &pt->pages);
+#elif defined(__FreeBSD__)
+    TAILQ_INSERT_HEAD(&pt->pages, p, plinks.q);
+#endif
 	spin_unlock(&pt->lock);
 	atomic_long_add(1 << pt->order, &allocated_pages);
 }
@@ -243,10 +268,18 @@ static struct page *ttm_pool_type_take(struct ttm_pool_type *pt)
 	struct page *p;
 
 	spin_lock(&pt->lock);
-	p = list_first_entry_or_null(&pt->pages, typeof(*p), lru);
+#ifdef __linux__
+    p = list_first_entry_or_null(&pt->pages, typeof(*p), lru);
+#elif defined(__FreeBSD__)
+    p = TAILQ_FIRST(&pt->pages);
+#endif
 	if (p) {
 		atomic_long_sub(1 << pt->order, &allocated_pages);
-		list_del(&p->lru);
+#ifdef __linux__
+        list_del(&p->lru);
+#elif defined(__FreeBSD__)
+        TAILQ_REMOVE(&pt->pages, p, plinks.q);
+#endif
 	}
 	spin_unlock(&pt->lock);
 
@@ -261,7 +294,11 @@ static void ttm_pool_type_init(struct ttm_pool_type *pt, struct ttm_pool *pool,
 	pt->caching = caching;
 	pt->order = order;
 	spin_lock_init(&pt->lock);
-	INIT_LIST_HEAD(&pt->pages);
+#ifdef __linux__
+    INIT_LIST_HEAD(&pt->pages);
+#elif defined(__FreeBSD__)
+    TAILQ_INIT(&pt->pages);
+#endif
 
 	spin_lock(&shrinker_lock);
 	list_add_tail(&pt->shrinker_list, &shrinker_list);
@@ -332,6 +369,7 @@ static unsigned int ttm_pool_shrink(void)
 	return num_pages;
 }
 
+#ifdef __linux__
 /* Return the allocation order based for a page */
 static unsigned int ttm_pool_page_order(struct ttm_pool *pool, struct page *p)
 {
@@ -343,7 +381,10 @@ static unsigned int ttm_pool_page_order(struct ttm_pool *pool, struct page *p)
 
 	return p->private;
 }
-
+#elif defined(__FreeBSD__)
+/* On FreeBSD, we store the order in a table in `struct ttm_tt` because there
+ * is no private field in `struct vm_page` to put ttm_pool data. */
+#endif
 /**
  * ttm_pool_alloc - Fill a ttm_tt object
  *
@@ -364,6 +405,9 @@ int ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
 	struct page **caching = tt->pages;
 	struct page **pages = tt->pages;
 	gfp_t gfp_flags = GFP_USER;
+#ifdef __FreeBSD__
+    unsigned int *orders = tt->orders;
+#endif
 	unsigned int i, order;
 	struct page *p;
 	int r;
@@ -422,8 +466,15 @@ int ttm_pool_alloc(struct ttm_pool *pool, struct ttm_tt *tt,
 		}
 
 		num_pages -= 1 << order;
-		for (i = 1 << order; i; --i)
+#ifdef __linux__
+        for (i = 1 << order; i; --i)
 			*(pages++) = p++;
+#elif defined(__FreeBSD__)
+        for (i = 1 << order; i; --i) {
+			*(pages++) = p++;
+			*(orders++) = order;
+		}
+#endif
 	}
 
 	r = ttm_pool_apply_caching(caching, pages, tt->caching);
@@ -438,7 +489,11 @@ error_free_page:
 error_free_all:
 	num_pages = tt->num_pages - num_pages;
 	for (i = 0; i < num_pages; ) {
+#ifdef __linux__
 		order = ttm_pool_page_order(pool, tt->pages[i]);
+#elif defined(__FreeBSD__)
+        order = tt->orders[i];
+#endif
 		ttm_pool_free_page(pool, tt->caching, order, tt->pages[i]);
 		i += 1 << order;
 	}
@@ -464,7 +519,11 @@ void ttm_pool_free(struct ttm_pool *pool, struct ttm_tt *tt)
 		unsigned int order, num_pages;
 		struct ttm_pool_type *pt;
 
-		order = ttm_pool_page_order(pool, p);
+#ifdef __linux__
+        order = ttm_pool_page_order(pool, p);
+#elif defined(__FreeBSD__)
+        order = tt->orders[i];
+#endif
 		num_pages = 1ULL << order;
 		if (tt->dma_address)
 			ttm_pool_unmap(pool, tt->dma_address[i], num_pages);
@@ -556,7 +615,11 @@ static unsigned long ttm_pool_shrinker_count(struct shrinker *shrink,
 {
 	unsigned long num_pages = atomic_long_read(&allocated_pages);
 
-	return num_pages ? num_pages : SHRINK_EMPTY;
+#ifdef __linux__
+    return num_pages ? num_pages : SHRINK_EMPTY;
+#elif defined(__FreeBSD__)
+    return num_pages ? num_pages : 0;
+#endif
 }
 
 #ifdef CONFIG_DEBUG_FS
@@ -568,8 +631,13 @@ static unsigned int ttm_pool_type_count(struct ttm_pool_type *pt)
 
 	spin_lock(&pt->lock);
 	/* Only used for debugfs, the overhead doesn't matter */
+#ifdef __linux__
 	list_for_each_entry(p, &pt->pages, lru)
 		++count;
+#elif defined(__FreeBSD__)
+	TAILQ_FOREACH(p, &pt->pages, plinks.q)
+		++count;
+#endif
 	spin_unlock(&pt->lock);
 
 	return count;
