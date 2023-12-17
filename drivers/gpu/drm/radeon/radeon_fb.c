@@ -48,13 +48,13 @@ struct radeon_fbdev {
 	struct radeon_device *rdev;
 };
 
-#ifdef __linux__
 static int
 radeonfb_open(struct fb_info *info, int user)
 {
 	struct radeon_fbdev *rfbdev = info->par;
 	struct radeon_device *rdev = rfbdev->rdev;
 	int ret = pm_runtime_get_sync(rdev->ddev->dev);
+
 	if (ret < 0 && ret != -EACCES) {
 		pm_runtime_mark_last_busy(rdev->ddev->dev);
 		pm_runtime_put_autosuspend(rdev->ddev->dev);
@@ -73,18 +73,15 @@ radeonfb_release(struct fb_info *info, int user)
 	pm_runtime_put_autosuspend(rdev->ddev->dev);
 	return 0;
 }
-#endif	/* __linux__ */
 
 static const struct fb_ops radeonfb_ops = {
 	.owner = THIS_MODULE,
 	DRM_FB_HELPER_DEFAULT_OPS,
-#ifdef __linux__
 	.fb_open = radeonfb_open,
 	.fb_release = radeonfb_release,
 	.fb_fillrect = drm_fb_helper_cfb_fillrect,
 	.fb_copyarea = drm_fb_helper_cfb_copyarea,
 	.fb_imageblit = drm_fb_helper_cfb_imageblit,
-#endif
 };
 
 
@@ -171,6 +168,7 @@ static int radeonfb_create_pinned_object(struct radeon_fbdev *rfbdev,
 		break;
 	case 2:
 		tiling_flags |= RADEON_TILING_SWAP_16BIT;
+		break;
 	default:
 		break;
 	}
@@ -200,9 +198,8 @@ static int radeonfb_create_pinned_object(struct radeon_fbdev *rfbdev,
 		radeon_bo_check_tiling(rbo, 0, 0);
 	ret = radeon_bo_kmap(rbo, NULL);
 	radeon_bo_unreserve(rbo);
-	if (ret) {
+	if (ret)
 		goto out_unref;
-	}
 
 	*gobj_p = gobj;
 	return 0;
@@ -283,6 +280,25 @@ static int radeonfb_create(struct drm_fb_helper *helper,
 	info->apertures->ranges[0].base = rdev->ddev->mode_config.fb_base;
 	info->apertures->ranges[0].size = rdev->mc.aper_size;
 
+#ifdef __FreeBSD__
+	/*
+	 * We can register the fictitious memory range based on the
+	 * info->apertures->ranges[0] values.
+	 *
+	 * This was handled in register_framebuffer() in the past, also based
+	 * on the values of info->apertures->ranges[0]. However, the `amdgpu`
+	 * driver stopped setting them when it got rid of its specific
+	 * framebuffer initialization to use the generic drm_fb_helper code.
+	 *
+	 * We can't do this in register_framebuffer() anymore because the
+	 * values passed to register_fictitious_range() below are unavailable
+	 * from a generic structure set by both drivers.
+	 */
+	register_fictitious_range(
+	    info->apertures->ranges[0].base,
+	    info->apertures->ranges[0].size);
+#endif
+
 	/* Use default scratch pixmap (info->pixmap.flags = FB_PIXMAP_SYSTEM) */
 
 	if (info->screen_base == NULL) {
@@ -296,13 +312,10 @@ static int radeonfb_create(struct drm_fb_helper *helper,
 	DRM_INFO("fb depth is %d\n", fb->format->depth);
 	DRM_INFO("   pitch is %d\n", fb->pitches[0]);
 
-	vga_switcheroo_client_fb_set(rdev->ddev->pdev, info);
+	vga_switcheroo_client_fb_set(rdev->pdev, info);
 	return 0;
 
 out:
-	if (rbo) {
-
-	}
 	if (fb && ret) {
 		drm_gem_object_put(gobj);
 		drm_framebuffer_unregister_private(fb);
@@ -315,6 +328,12 @@ out:
 static int radeon_fbdev_destroy(struct drm_device *dev, struct radeon_fbdev *rfbdev)
 {
 	struct drm_framebuffer *fb = &rfbdev->fb;
+
+#ifdef __FreeBSD__
+	unregister_fictitious_range(
+	    rfbdev->helper.fbdev->apertures->ranges[0].base,
+	    rfbdev->helper.fbdev->apertures->ranges[0].size);
+#endif
 
 	drm_fb_helper_unregister_fbi(&rfbdev->helper);
 

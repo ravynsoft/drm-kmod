@@ -11,14 +11,14 @@ assignees: ''
 A clear and concise description of what the bug is.
 
 **FreeBSD version**
-Paste the output of `uname -a`
+Paste the output of `uname -aKU`
 
 **PCI Info**
 
 <details>
   <summary>pciconf -lv</summary>
   
-Paste the output of `pciconf -vl`
+Paste the output of `pciconf -lv`
 
 </details>
 

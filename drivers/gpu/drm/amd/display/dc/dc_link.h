@@ -30,11 +30,14 @@
 #include "dc_types.h"
 #include "grph_object_defs.h"
 
+struct link_resource;
+
 enum dc_link_fec_state {
 	dc_link_fec_not_ready,
 	dc_link_fec_ready,
 	dc_link_fec_enabled
 };
+
 struct dc_link_status {
 	bool link_active;
 	struct dpcd_caps *dpcd_caps;
@@ -44,6 +47,10 @@ struct dc_link_status {
 struct link_mst_stream_allocation {
 	/* DIG front */
 	const struct stream_encoder *stream_enc;
+#if defined(CONFIG_DRM_AMD_DC_DCN)
+	/* HPO DP Stream Encoder */
+	const struct hpo_dp_stream_encoder *hpo_dp_stream_enc;
+#endif
 	/* associate DRM payload table with DC stream encoder */
 	uint8_t vcp_id;
 	/* number of slots required for the DP stream in transport packet */
@@ -80,6 +87,7 @@ struct psr_settings {
 	 */
 	bool psr_frame_capture_indication_req;
 	unsigned int psr_sdp_transmit_line_num_deadline;
+	unsigned int psr_power_opt;
 };
 
 /*
@@ -100,7 +108,16 @@ struct dc_link {
 	bool link_state_valid;
 	bool aux_access_disabled;
 	bool sync_lt_in_progress;
-	bool lttpr_non_transparent_mode;
+	enum lttpr_mode lttpr_mode;
+	bool is_internal_display;
+
+	/* TODO: Rename. Flag an endpoint as having a programmable mapping to a
+	 * DIG encoder. */
+	bool is_dig_mapping_flexible;
+	bool hpd_status; /* HPD status of link without physical HPD pin. */
+	bool is_hpd_pending; /* Indicates a new received hpd */
+
+	bool edp_sink_present;
 
 	/* caps is the same as reported_link_cap. link_traing use
 	 * reported_link_cap. Will clean up.  TODO
@@ -108,8 +125,12 @@ struct dc_link {
 	struct dc_link_settings reported_link_cap;
 	struct dc_link_settings verified_link_cap;
 	struct dc_link_settings cur_link_settings;
-	struct dc_lane_settings cur_lane_setting;
+	struct dc_lane_settings cur_lane_setting[LANE_COUNT_DP_MAX];
 	struct dc_link_settings preferred_link_setting;
+	/* preferred_training_settings are override values that
+	 * come from DM. DM is responsible for the memory
+	 * management of the override pointers.
+	 */
 	struct dc_link_training_overrides preferred_training_settings;
 	struct dp_audio_test_data audio_test_data;
 
@@ -118,6 +139,11 @@ struct dc_link {
 	uint8_t hpd_src;
 
 	uint8_t link_enc_hw_inst;
+	/* DIG link encoder ID. Used as index in link encoder resource pool.
+	 * For links with fixed mapping to DIG, this is not changed after dc_link
+	 * object creation.
+	 */
+	enum engine_id eng_id;
 
 	bool test_pattern_enabled;
 	union compliance_test_state compliance_test_state;
@@ -137,6 +163,11 @@ struct dc_link {
 	struct panel_cntl *panel_cntl;
 	struct link_encoder *link_enc;
 	struct graphics_object_id link_id;
+	/* Endpoint type distinguishes display endpoints which do not have entries
+	 * in the BIOS connector table from those that do. Helps when tracking link
+	 * encoder to display endpoint assignments.
+	 */
+	enum display_endpoint_type ep_type;
 	union ddi_channel_mapping ddi_channel_mapping;
 	struct connector_device_tag_info device_tag;
 	struct dpcd_caps dpcd_caps;
@@ -151,11 +182,21 @@ struct dc_link {
 
 	struct psr_settings psr_settings;
 
+	/* Drive settings read from integrated info table */
+	struct dc_lane_settings bios_forced_drive_settings;
+
+	/* Vendor specific LTTPR workaround variables */
+	uint8_t vendor_specific_lttpr_link_rate_wa;
+	bool apply_vendor_specific_lttpr_link_rate_wa;
+
 	/* MST record stream using this link */
 	struct link_flags {
 		bool dp_keep_receiver_powered;
 		bool dp_skip_DID2;
 		bool dp_skip_reset_segment;
+		bool dp_mot_reset_segment;
+		/* Some USB4 docks do not handle turning off MST DSC once it has been enabled. */
+		bool dpia_mst_dsc_always_on;
 	} wa_flags;
 	struct link_mst_stream_allocation_table mst_stream_alloc_table;
 
@@ -180,16 +221,40 @@ static inline struct dc_link *dc_get_link_at_index(struct dc *dc, uint32_t link_
 	return dc->links[link_index];
 }
 
-static inline struct dc_link *get_edp_link(const struct dc *dc)
+static inline void get_edp_links(const struct dc *dc,
+		struct dc_link **edp_links,
+		int *edp_num)
 {
 	int i;
 
-	// report any eDP links, even unconnected DDI's
+	*edp_num = 0;
 	for (i = 0; i < dc->link_count; i++) {
-		if (dc->links[i]->connector_signal == SIGNAL_TYPE_EDP)
-			return dc->links[i];
+		// report any eDP links, even unconnected DDI's
+		if (!dc->links[i])
+			continue;
+		if (dc->links[i]->connector_signal == SIGNAL_TYPE_EDP) {
+			edp_links[*edp_num] = dc->links[i];
+			if (++(*edp_num) == MAX_NUM_EDP)
+				return;
+		}
 	}
-	return NULL;
+}
+
+static inline bool dc_get_edp_link_panel_inst(const struct dc *dc,
+		const struct dc_link *link,
+		unsigned int *inst_out)
+{
+	struct dc_link *edp_links[MAX_NUM_EDP];
+	int edp_num;
+
+	if (link->connector_signal != SIGNAL_TYPE_EDP)
+		return false;
+	get_edp_links(dc, edp_links, &edp_num);
+	if ((edp_num > 1) && (link->link_index > edp_links[0]->link_index))
+		*inst_out = 1;
+	else
+		*inst_out = 0;
+	return true;
 }
 
 /* Set backlight level of an embedded panel (eDP, LVDS).
@@ -219,13 +284,20 @@ int dc_link_get_backlight_level(const struct dc_link *dc_link);
 
 int dc_link_get_target_backlight_pwm(const struct dc_link *link);
 
-bool dc_link_set_psr_allow_active(struct dc_link *dc_link, bool enable, bool wait);
+bool dc_link_set_psr_allow_active(struct dc_link *dc_link, const bool *enable,
+		bool wait, bool force_static, const unsigned int *power_opts);
 
-bool dc_link_get_psr_state(const struct dc_link *dc_link, uint32_t *psr_state);
+bool dc_link_get_psr_state(const struct dc_link *dc_link, enum dc_psr_state *state);
 
 bool dc_link_setup_psr(struct dc_link *dc_link,
 		const struct dc_stream_state *stream, struct psr_config *psr_config,
 		struct psr_context *psr_context);
+
+void dc_link_get_psr_residency(const struct dc_link *link, uint32_t *residency);
+
+void dc_link_blank_all_dp_displays(struct dc *dc);
+
+void dc_link_blank_dp_stream(struct dc_link *link, bool hw_init);
 
 /* Request DC to detect if there is a Panel connected.
  * boot - If this call is during initial boot.
@@ -238,13 +310,16 @@ enum dc_detect_reason {
 	DETECT_REASON_HPD,
 	DETECT_REASON_HPDRX,
 	DETECT_REASON_FALLBACK,
-	DETECT_REASON_RETRAIN
+	DETECT_REASON_RETRAIN,
 };
 
 bool dc_link_detect(struct dc_link *dc_link, enum dc_detect_reason reason);
 bool dc_link_get_hpd_state(struct dc_link *dc_link);
 enum dc_status dc_link_allocate_mst_payload(struct pipe_ctx *pipe_ctx);
-enum dc_status dc_link_reallocate_mst_payload(struct dc_link *link);
+#if defined(CONFIG_DRM_AMD_DC_DCN)
+enum dc_status dc_link_reduce_mst_payload(struct pipe_ctx *pipe_ctx, uint32_t req_pbn);
+enum dc_status dc_link_increase_mst_payload(struct pipe_ctx *pipe_ctx, uint32_t req_pbn);
+#endif
 
 /* Notify DC about DP RX Interrupt (aka Short Pulse Interrupt).
  * Return:
@@ -253,7 +328,19 @@ enum dc_status dc_link_reallocate_mst_payload(struct dc_link *link);
  * false - no change in Downstream port status. No further action required
  * from DM. */
 bool dc_link_handle_hpd_rx_irq(struct dc_link *dc_link,
-		union hpd_irq_data *hpd_irq_dpcd_data, bool *out_link_loss);
+		union hpd_irq_data *hpd_irq_dpcd_data, bool *out_link_loss,
+		bool defer_handling, bool *has_left_work);
+
+/*
+ * On eDP links this function call will stall until T12 has elapsed.
+ * If the panel is not in power off state, this function will return
+ * immediately.
+ */
+bool dc_link_wait_for_t12(struct dc_link *link);
+
+void dc_link_dp_handle_automated_test(struct dc_link *link);
+void dc_link_dp_handle_link_loss(struct dc_link *link);
+bool dc_link_dp_allow_hpd_rx_irq(const struct dc_link *link);
 
 struct dc_sink_init_data;
 
@@ -271,21 +358,25 @@ void dc_link_remove_remote_sink(
 
 void dc_link_dp_set_drive_settings(
 	struct dc_link *link,
+	const struct link_resource *link_res,
 	struct link_training_settings *lt_settings);
 
 bool dc_link_dp_perform_link_training_skip_aux(
 	struct dc_link *link,
+	const struct link_resource *link_res,
 	const struct dc_link_settings *link_setting);
 
 enum link_training_result dc_link_dp_perform_link_training(
 	struct dc_link *link,
-	const struct dc_link_settings *link_setting,
+	const struct link_resource *link_res,
+	const struct dc_link_settings *link_settings,
 	bool skip_video_pattern);
 
 bool dc_link_dp_sync_lt_begin(struct dc_link *link);
 
 enum link_training_result dc_link_dp_sync_lt_attempt(
 	struct dc_link *link,
+	const struct link_resource *link_res,
 	struct dc_link_settings *link_setting,
 	struct dc_link_training_overrides *lt_settings);
 
@@ -303,6 +394,8 @@ bool dc_link_dp_set_test_pattern(
 	const unsigned char *p_custom_pattern,
 	unsigned int cust_pattern_size);
 
+bool dc_link_dp_get_max_link_enc_cap(const struct dc_link *link, struct dc_link_settings *max_link_enc_cap);
+
 void dc_link_enable_hpd_filter(struct dc_link *link, bool enable);
 
 bool dc_link_is_dp_sink_present(struct dc_link *link);
@@ -319,9 +412,6 @@ bool dc_link_is_hdcp22(struct dc_link *link, enum signal_type signal);
 void dc_link_set_drive_settings(struct dc *dc,
 				struct link_training_settings *lt_settings,
 				const struct dc_link *link);
-void dc_link_perform_link_training(struct dc *dc,
-				   struct dc_link_settings *link_setting,
-				   bool skip_video_pattern);
 void dc_link_set_preferred_link_settings(struct dc *dc,
 					 struct dc_link_settings *link_setting,
 					 struct dc_link *link);
@@ -361,5 +451,16 @@ uint32_t dc_bandwidth_in_kbps_from_timing(
 	const struct dc_crtc_timing *timing);
 
 bool dc_link_is_fec_supported(const struct dc_link *link);
+bool dc_link_should_enable_fec(const struct dc_link *link);
 
+#if defined(CONFIG_DRM_AMD_DC_DCN)
+uint32_t dc_link_bw_kbps_from_raw_frl_link_rate_data(uint8_t bw);
+enum dp_link_encoding dc_link_dp_mst_decide_link_encoding_format(const struct dc_link *link);
+#endif
+
+const struct link_resource *dc_link_get_cur_link_res(const struct dc_link *link);
+/* take a snapshot of current link resource allocation state */
+void dc_get_cur_link_res_map(const struct dc *dc, uint32_t *map);
+/* restore link resource allocation state from a snapshot */
+void dc_restore_link_res_map(const struct dc *dc, uint32_t *map);
 #endif /* DC_LINK_H_ */

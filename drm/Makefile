@@ -5,12 +5,14 @@ SRCDIR=	${.CURDIR:H}/drivers/gpu/drm
 .PATH:	${SRCDIR} ${SRCDIR}/scheduler
 
 .include "../kconfig.mk"
+.include "../linuxkpi_version.mk"
 
 KMOD=	drm
 SRCS=	drm_atomic.c \
 	drm_atomic_helper.c \
 	drm_atomic_state_helper.c \
 	drm_atomic_uapi.c \
+	drm_aperture.c \
 	drm_auth.c \
 	drm_blend.c \
 	drm_bridge.c \
@@ -29,6 +31,7 @@ SRCS=	drm_atomic.c \
 	drm_dsc.c \
 	drm_dumb_buffers.c \
 	drm_edid.c \
+	drm_displayid.c \
 	drm_encoder.c \
 	drm_file.c \
 	drm_flip_work.c \
@@ -38,16 +41,15 @@ SRCS=	drm_atomic.c \
 	drm_gem_framebuffer_helper.c \
 	drm_hashtab.c \
 	drm_ioctl.c \
-	drm_irq.c \
 	drm_lease.c \
 	drm_managed.c \
-	drm_memory.c \
 	drm_mm.c \
 	drm_modes.c \
 	drm_mode_config.c \
 	drm_mode_object.c \
 	drm_modeset_lock.c \
 	drm_modeset_helper.c \
+	drm_nomodeset.c \
 	drm_os_freebsd.c \
 	drm_panel.c \
 	drm_pci.c \
@@ -67,28 +69,34 @@ SRCS=	drm_atomic.c \
 	drm_vblank_work.c \
 	drm_vma_manager.c \
 	linux_fb.c \
-	tainted_linux_fb.c
+	vt_drmfb.c
 
 .if !empty(KCONFIG:MDRM_FBDEV_EMULATION)
 SRCS+=	drm_fb_helper.c
 .endif
 
-.if !empty(KCONFIG:MAGP)
-SRCS+=	drm_agpsupport.c
+.if !empty(KCONFIG:MDRM_LEGACY)
+SRCS+=	drm_agpsupport.c \
+	drm_irq.c \
+	drm_memory.c
 .endif
 
 .if !empty(KCONFIG:MCOMPAT)
 SRCS+=	drm_ioc32.c
 .endif
 
-.if !empty(KCONFIG:MDEBUGFS)
-SRCS_DEBUG=	\
-		drm_debugfs.c \
-		drm_debugfs_crc.c
+.if !empty(KCONFIG:MDEBUG_FS)
+SRCS+=	\
+	drm_debugfs.c \
+	drm_debugfs_crc.c
 .endif
 
 .if !empty(KCONFIG:MDRM_DP_AUX_CHARDEV)
 SRCS+=	drm_dp_aux_dev.c
+.endif
+
+.if !empty(KCONFIG:MDRM_DP_AUX_BUS)
+SRCS+=	drm_dp_aux_bus.c
 .endif
 
 .if !empty(KCONFIG:MDRM_MIPI_DSI)
@@ -97,6 +105,11 @@ SRCS+=	drm_mipi_dsi.c
 
 .if !empty(KCONFIG:MDRM_PANEL_ORIENTATION_QUIRKS)
 SRCS+=	drm_panel_orientation_quirks.c
+.endif
+
+.if !empty(KCONFIG:MDRM_PRIVACY_SCREEN)
+SRCS+=	drm_privacy_screen.c \
+	drm_privacy_screen_x86.c
 .endif
 
 # drm scheduler (moved from amdgpu)
@@ -110,6 +123,7 @@ CFLAGS+= -I${.CURDIR:H}/linuxkpi/gplv2/include
 CFLAGS+= -I${.CURDIR:H}/linuxkpi/bsd/include
 CFLAGS+= -I${SYSDIR}/compat/linuxkpi/common/include
 CFLAGS+= -I${.CURDIR:H}/linuxkpi/dummy/include # fallback to dummy
+CFLAGS+= -I${SYSDIR}/compat/linuxkpi/dummy/include
 CFLAGS+= -I${SRCDIR}
 CFLAGS+= -I${.CURDIR:H}/include
 CFLAGS+= -I${.CURDIR:H}/include/drm
@@ -117,7 +131,7 @@ CFLAGS+= -I${.CURDIR:H}/include/uapi
 CFLAGS+= -I${SRCDIR:H}
 
 CFLAGS+= '-DKBUILD_MODNAME="${KMOD}"'
-CFLAGS+= '-DLINUXKPI_PARAM_PREFIX=drm_' -DDRM_SYSCTL_PARAM_PREFIX=_dri -DLINUXKPI_VERSION=50000
+CFLAGS+= '-DLINUXKPI_PARAM_PREFIX=drm_' -DDRM_SYSCTL_PARAM_PREFIX=_dri
 CFLAGS+= ${KCONFIG:C/(.*)/-DCONFIG_\1/}
 
 SRCS+=	device_if.h \
@@ -132,7 +146,6 @@ SRCS+=	device_if.h \
 	opt_syscons.h \
 	opt_drm.h \
 	opt_vm.h \
-	opt_compat.h \
 	opt_syscons.h
 
 .if ${MACHINE_CPUARCH} == "powerpc"

@@ -559,55 +559,58 @@ dma_buf_move_notify(struct dma_buf *db)
 			dba->importer_ops->move_notify(dba);
 }
 
-void *
-dma_buf_vmap(struct dma_buf *dmabuf)
+int
+dma_buf_vmap(struct dma_buf *dmabuf, struct dma_buf_map *map)
 {
-	void *ptr;
+	struct dma_buf_map ptr;
+	int ret = 0;
+
+	dma_buf_map_clear(map);
 
 	if (WARN_ON(!dmabuf))
-		return NULL;
+		return -EINVAL;
 
 	if (!dmabuf->ops->vmap)
-		return NULL;
+		return -EINVAL;
 
 	mutex_lock(&dmabuf->lock);
 	if (dmabuf->vmapping_counter) {
 		dmabuf->vmapping_counter++;
-		BUG_ON(!dmabuf->vmap_ptr);
-		ptr = dmabuf->vmap_ptr;
+		BUG_ON(dma_buf_map_is_null(&dmabuf->vmap_ptr));
+		*map = dmabuf->vmap_ptr;
 		goto out_unlock;
 	}
 
-	BUG_ON(dmabuf->vmap_ptr);
+	BUG_ON(dma_buf_map_is_set(&dmabuf->vmap_ptr));
 
-	ptr = dmabuf->ops->vmap(dmabuf);
-	if (WARN_ON_ONCE(IS_ERR(ptr)))
-		ptr = NULL;
-	if (!ptr)
+	ret = dmabuf->ops->vmap(dmabuf, &ptr);
+	if (WARN_ON_ONCE(ret))
 		goto out_unlock;
 
 	dmabuf->vmap_ptr = ptr;
 	dmabuf->vmapping_counter = 1;
 
+	*map = dmabuf->vmap_ptr;
+
 out_unlock:
 	mutex_unlock(&dmabuf->lock);
-	return ptr;
+	return ret;
 }
 
-void dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
+void dma_buf_vunmap(struct dma_buf *dmabuf, struct dma_buf_map *map)
 {
 	if (WARN_ON(!dmabuf))
 		return;
 
-	BUG_ON(!dmabuf->vmap_ptr);
+	BUG_ON(dma_buf_map_is_null(&dmabuf->vmap_ptr));
 	BUG_ON(dmabuf->vmapping_counter == 0);
-	BUG_ON(dmabuf->vmap_ptr != vaddr);
+	BUG_ON(!dma_buf_map_is_equal(&dmabuf->vmap_ptr, map));
 
 	mutex_lock(&dmabuf->lock);
 	if (--dmabuf->vmapping_counter == 0) {
 		if (dmabuf->ops->vunmap)
-			dmabuf->ops->vunmap(dmabuf, vaddr);
-		dmabuf->vmap_ptr = NULL;
+			dmabuf->ops->vunmap(dmabuf, map);
+		dma_buf_map_clear(&dmabuf->vmap_ptr);
 	}
 	mutex_unlock(&dmabuf->lock);
 }

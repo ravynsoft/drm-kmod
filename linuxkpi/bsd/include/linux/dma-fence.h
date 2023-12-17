@@ -89,8 +89,12 @@ void dma_fence_init(struct dma_fence *fence, const struct dma_fence_ops *ops,
     spinlock_t *lock, u64 context, u64 seqno);
 void dma_fence_release(struct kref *kref);
 void dma_fence_free(struct dma_fence *fence);
+void dma_fence_describe(struct dma_fence *fence, struct seq_file *seq);
 int dma_fence_signal(struct dma_fence *fence);
 int dma_fence_signal_locked(struct dma_fence *fence);
+int dma_fence_signal_timestamp(struct dma_fence *fence, ktime_t timestamp);
+int dma_fence_signal_timestamp_locked(struct dma_fence *fence,
+				      ktime_t timestamp);
 signed long dma_fence_default_wait(struct dma_fence *fence,
     bool intr, signed long timeout);
 int dma_fence_add_callback(struct dma_fence *fence,
@@ -104,6 +108,7 @@ signed long dma_fence_wait_timeout(struct dma_fence *,
 signed long dma_fence_wait_any_timeout(struct dma_fence **fences,
     uint32_t count, bool intr, signed long timeout, uint32_t *idx);
 struct dma_fence *dma_fence_get_stub(void);
+struct dma_fence *dma_fence_allocate_private_stub(void);
 u64 dma_fence_context_alloc(unsigned num);
 void dma_fence_put(struct dma_fence *fence);
 struct dma_fence *dma_fence_get(struct dma_fence *fence);
@@ -119,18 +124,9 @@ int dma_fence_get_status_locked(struct dma_fence *fence);
 void dma_fence_set_error(struct dma_fence *fence, int error);
 signed long dma_fence_wait(struct dma_fence *fence, bool intr);
 
+#define	dma_fence_begin_signalling() true
+#define	dma_fence_end_signalling(cookie) do { (void)cookie; } while (0)
+
 #define	__dma_fence_might_wait	(void)
-
-#define DMA_FENCE_TRACE(f, fmt, args...) \
-	do {				\
-	} while (0)
-
-#define DMA_FENCE_WARN(f, fmt, args...) \
-	do {				\
-	} while (0)
-
-#define DMA_FENCE_ERR(f, fmt, args...) \
-	do {				\
-	} while (0)
 
 #endif

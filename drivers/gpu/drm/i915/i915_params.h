@@ -36,6 +36,7 @@ struct drm_printer;
 
 #define ENABLE_GUC_SUBMISSION		BIT(0)
 #define ENABLE_GUC_LOAD_HUC		BIT(1)
+#define ENABLE_GUC_MASK			GENMASK(1, 0)
 
 /*
  * Invoke param, a function-like macro, for each i915 param, with arguments:
@@ -48,6 +49,13 @@ struct drm_printer;
  * mode: debugfs file permissions, one of {0400, 0600, 0}, use 0 to not create
  *       debugfs file
  */
+#ifdef __FreeBSD__
+/* Changes in default values in I915_PARAMS_FOR_EACH below:
+ *
+ *   enable_guc: -1 -> 0
+ *   GuC initialization freeze the computer.
+ */
+#endif
 #define I915_PARAMS_FOR_EACH(param) \
 	param(char *, vbt_firmware, NULL, 0400) \
 	param(int, modeset, -1, 0400) \
@@ -56,10 +64,10 @@ struct drm_printer;
 	param(int, vbt_sdvo_panel_type, -1, 0400) \
 	param(int, enable_dc, -1, 0400) \
 	param(int, enable_fbc, -1, 0600) \
-	param(int, enable_psr, 0, 0600) \
-	param(bool, psr_safest_params, false, 0600) \
-	param(bool, enable_psr2_sel_fetch, false, 0600) \
-	param(int, disable_power_well, 0, 0400) \
+	param(int, enable_psr, -1, 0600) \
+	param(bool, psr_safest_params, false, 0400) \
+	param(bool, enable_psr2_sel_fetch, true, 0400) \
+	param(int, disable_power_well, -1, 0400) \
 	param(int, enable_ips, 1, 0600) \
 	param(int, invert_brightness, 0, 0600) \
 	param(int, enable_guc, 0, 0400) \
@@ -67,6 +75,7 @@ struct drm_printer;
 	param(char *, guc_firmware_path, NULL, 0400) \
 	param(char *, huc_firmware_path, NULL, 0400) \
 	param(char *, dmc_firmware_path, NULL, 0400) \
+	param(bool, memtest, false, 0400) \
 	param(int, mmio_debug, -IS_ENABLED(CONFIG_DRM_I915_DEBUG_MMIO), 0600) \
 	param(int, edp_vswing, 0, 0400) \
 	param(unsigned int, reset, 3, 0600) \
@@ -74,17 +83,18 @@ struct drm_printer;
 	param(int, fastboot, -1, 0600) \
 	param(int, enable_dpcd_backlight, -1, 0600) \
 	param(char *, force_probe, CONFIG_DRM_I915_FORCE_PROBE, 0400) \
-	param(unsigned long, fake_lmem_start, 0, 0400) \
+	param(unsigned long, fake_lmem_start, 0, IS_ENABLED(CONFIG_DRM_I915_UNSTABLE_FAKE_LMEM) ? 0400 : 0) \
+	param(unsigned int, request_timeout_ms, CONFIG_DRM_I915_REQUEST_TIMEOUT, CONFIG_DRM_I915_REQUEST_TIMEOUT ? 0600 : 0) \
 	/* leave bools at the end to not create holes */ \
 	param(bool, enable_hangcheck, true, 0600) \
 	param(bool, load_detect_test, false, 0600) \
 	param(bool, force_reset_modeset_test, false, 0600) \
-	param(bool, error_capture, true, 0600) \
+	param(bool, error_capture, true, IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR) ? 0600 : 0) \
 	param(bool, disable_display, false, 0400) \
 	param(bool, verbose_state_checks, true, 0) \
 	param(bool, nuclear_pageflip, false, 0400) \
 	param(bool, enable_dp_mst, true, 0600) \
-	param(bool, enable_gvt, true, 0400)
+	param(bool, enable_gvt, false, IS_ENABLED(CONFIG_DRM_I915_GVT) ? 0400 : 0)
 
 #define MEMBER(T, member, ...) T member;
 struct i915_params {
@@ -99,4 +109,3 @@ void i915_params_copy(struct i915_params *dest, const struct i915_params *src);
 void i915_params_free(struct i915_params *params);
 
 #endif
-

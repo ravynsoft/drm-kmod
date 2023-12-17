@@ -24,11 +24,12 @@
 
 #include <linux/dma-mapping.h>
 #include <linux/export.h>
+#include <linux/list.h>
+#include <linux/mutex.h>
 #include <linux/pci.h>
 #include <linux/slab.h>
 
 #include <drm/drm.h>
-#include <drm/drm_agpsupport.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_print.h>
 
@@ -40,125 +41,9 @@
 #endif
 
 #ifdef CONFIG_DRM_LEGACY
-
-#ifdef __FreeBSD__
-static void
-drm_pci_busdma_callback(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
-{
-	drm_dma_handle_t *dmah = arg;
-
-	if (error != 0)
-		return;
-
-	KASSERT(nsegs == 1, ("drm_pci_busdma_callback: bad dma segment count"));
-	dmah->busaddr = segs[0].ds_addr;
-}
-#endif
-
-/**
- * drm_pci_alloc - Allocate a PCI consistent memory block, for DMA.
- * @dev: DRM device
- * @size: size of block to allocate
- * @align: alignment of block
- *
- * FIXME: This is a needless abstraction of the Linux dma-api and should be
- * removed.
- *
- * Return: A handle to the allocated memory block on success or NULL on
- * failure.
- */
-drm_dma_handle_t *drm_pci_alloc(struct drm_device * dev, size_t size, size_t align)
-{
-#ifdef __FreeBSD__
-	drm_dma_handle_t *dmah;
-	int ret;
-
-	/* Need power-of-two alignment, so fail the allocation if it isn't. */
-	if ((align & (align - 1)) != 0) {
-		DRM_ERROR("drm_pci_alloc with non-power-of-two alignment %d\n",
-		    (int)align);
-		return NULL;
-	}
-
-	dmah = malloc(sizeof(drm_dma_handle_t), DRM_MEM_DMA, M_ZERO | M_NOWAIT);
-	if (dmah == NULL)
-		return NULL;
-
-	ret = bus_dma_tag_create(
-	    bus_get_dma_tag(dev->dev->bsddev), /* parent */
-	    align, 0, /* align, boundary */
-	    BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR, /* lowaddr, highaddr */
-	    NULL, NULL, /* filtfunc, filtfuncargs */
-	    size, 1, size, /* maxsize, nsegs, maxsegsize */
-	    0, NULL, NULL, /* flags, lockfunc, lockfuncargs */
-	    &dmah->tag);
-	if (ret != 0) {
-		free(dmah, DRM_MEM_DMA);
-		return NULL;
-	}
-
-	ret = bus_dmamem_alloc(dmah->tag, (void **)&dmah->vaddr,
-	    BUS_DMA_WAITOK | BUS_DMA_ZERO | BUS_DMA_NOCACHE, &dmah->map);
-	if (ret != 0) {
-		bus_dma_tag_destroy(dmah->tag);
-		free(dmah, DRM_MEM_DMA);
-		return NULL;
-	}
-
-	ret = bus_dmamap_load(dmah->tag, dmah->map, dmah->vaddr, size,
-	    drm_pci_busdma_callback, dmah, BUS_DMA_NOWAIT);
-	if (ret != 0) {
-		bus_dmamem_free(dmah->tag, dmah->vaddr, dmah->map);
-		bus_dma_tag_destroy(dmah->tag);
-		free(dmah, DRM_MEM_DMA);
-		return NULL;
-	}
-	return dmah;
-#else
-	drm_dma_handle_t *dmah;
-
-	/* pci_alloc_consistent only guarantees alignment to the smallest
-	 * PAGE_SIZE order which is greater than or equal to the requested size.
-	 * Return NULL here for now to make sure nobody tries for larger alignment
-	 */
-	if (align > size)
-		return NULL;
-
-	dmah = kmalloc(sizeof(drm_dma_handle_t), GFP_KERNEL);
-	if (!dmah)
-		return NULL;
-
-	dmah->size = size;
-	dmah->vaddr = dma_alloc_coherent(&dev->pdev->dev, size,
-					 &dmah->busaddr,
-					 GFP_KERNEL);
-
-	if (dmah->vaddr == NULL) {
-		kfree(dmah);
-		return NULL;
-	}
-
-	return dmah;
-#endif
-}
-EXPORT_SYMBOL(drm_pci_alloc);
-
-/**
- * drm_pci_free - Free a PCI consistent memory block
- * @dev: DRM device
- * @dmah: handle to memory block
- *
- * FIXME: This is a needless abstraction of the Linux dma-api and should be
- * removed.
- */
-void drm_pci_free(struct drm_device * dev, drm_dma_handle_t * dmah)
-{
-	dma_free_coherent(&dev->pdev->dev, dmah->size, dmah->vaddr,
-			  dmah->busaddr);
-	kfree(dmah);
-}
-
-EXPORT_SYMBOL(drm_pci_free);
+/* List of devices hanging off drivers with stealth attach. */
+static LIST_HEAD(legacy_dev_list);
+static DEFINE_MUTEX(legacy_dev_list_lock);
 #endif
 
 static int drm_get_pci_domain(struct drm_device *dev)
@@ -175,74 +60,32 @@ static int drm_get_pci_domain(struct drm_device *dev)
 #ifdef __FreeBSD__
 	return pci_get_domain(dev->dev->bsddev);
 #else
-	return pci_domain_nr(dev->pdev->bus);
+	return pci_domain_nr(to_pci_dev(dev->dev)->bus);
 #endif
 }
 
 int drm_pci_set_busid(struct drm_device *dev, struct drm_master *master)
 {
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
+
 #ifdef __FreeBSD__
 	master->unique = kasprintf(GFP_KERNEL, "pci:%04x:%02x:%02x.%d",
 					drm_get_pci_domain(dev),
 					pci_get_bus(dev->dev->bsddev),
 					pci_get_slot(dev->dev->bsddev),
-					PCI_FUNC(dev->pdev->devfn));
+					PCI_FUNC(pdev->devfn));
 #else
 	master->unique = kasprintf(GFP_KERNEL, "pci:%04x:%02x:%02x.%d",
 					drm_get_pci_domain(dev),
-					dev->pdev->bus->number,
-					PCI_SLOT(dev->pdev->devfn),
-					PCI_FUNC(dev->pdev->devfn));
+					pdev->bus->number,
+					PCI_SLOT(pdev->devfn),
+					PCI_FUNC(pdev->devfn));
 #endif
 	if (!master->unique)
 		return -ENOMEM;
 
 	master->unique_len = strlen(master->unique);
 	return 0;
-}
-
-static int drm_pci_irq_by_busid(struct drm_device *dev, struct drm_irq_busid *p)
-{
-	if ((p->busnum >> 8) != drm_get_pci_domain(dev) ||
-	    (p->busnum & 0xff) != dev->pdev->bus->number ||
-	    p->devnum != PCI_SLOT(dev->pdev->devfn) || p->funcnum != PCI_FUNC(dev->pdev->devfn))
-		return -EINVAL;
-
-	p->irq = dev->pdev->irq;
-
-	DRM_DEBUG("%d:%d:%d => IRQ %d\n", p->busnum, p->devnum, p->funcnum,
-		  p->irq);
-	return 0;
-}
-
-/**
- * drm_irq_by_busid - Get interrupt from bus ID
- * @dev: DRM device
- * @data: IOCTL parameter pointing to a drm_irq_busid structure
- * @file_priv: DRM file private.
- *
- * Finds the PCI device with the specified bus id and gets its IRQ number.
- * This IOCTL is deprecated, and will now return EINVAL for any busid not equal
- * to that of the device that this DRM instance attached to.
- *
- * Return: 0 on success or a negative error code on failure.
- */
-int drm_irq_by_busid(struct drm_device *dev, void *data,
-		     struct drm_file *file_priv)
-{
-	struct drm_irq_busid *p = data;
-
-	if (!drm_core_check_feature(dev, DRIVER_LEGACY))
-		return -EOPNOTSUPP;
-
-	/* UMS was only ever support on PCI devices. */
-	if (WARN_ON(!dev->pdev))
-		return -EINVAL;
-
-	if (!drm_core_check_feature(dev, DRIVER_HAVE_IRQ))
-		return -EOPNOTSUPP;
-
-	return drm_pci_irq_by_busid(dev, p);
 }
 
 #ifdef __FreeBSD__
@@ -265,7 +108,55 @@ drm_getpciinfo(struct drm_device *dev, void *data, struct drm_file *file_priv)
 }
 #endif
 
-void drm_pci_agp_destroy(struct drm_device *dev)
+#ifdef CONFIG_DRM_LEGACY
+
+static int drm_legacy_pci_irq_by_busid(struct drm_device *dev, struct drm_irq_busid *p)
+{
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
+
+	if ((p->busnum >> 8) != drm_get_pci_domain(dev) ||
+	    (p->busnum & 0xff) != pdev->bus->number ||
+	    p->devnum != PCI_SLOT(pdev->devfn) || p->funcnum != PCI_FUNC(pdev->devfn))
+		return -EINVAL;
+
+	p->irq = pdev->irq;
+
+	DRM_DEBUG("%d:%d:%d => IRQ %d\n", p->busnum, p->devnum, p->funcnum,
+		  p->irq);
+	return 0;
+}
+
+/**
+ * drm_legacy_irq_by_busid - Get interrupt from bus ID
+ * @dev: DRM device
+ * @data: IOCTL parameter pointing to a drm_irq_busid structure
+ * @file_priv: DRM file private.
+ *
+ * Finds the PCI device with the specified bus id and gets its IRQ number.
+ * This IOCTL is deprecated, and will now return EINVAL for any busid not equal
+ * to that of the device that this DRM instance attached to.
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int drm_legacy_irq_by_busid(struct drm_device *dev, void *data,
+			    struct drm_file *file_priv)
+{
+	struct drm_irq_busid *p = data;
+
+	if (!drm_core_check_feature(dev, DRIVER_LEGACY))
+		return -EOPNOTSUPP;
+
+	/* UMS was only ever support on PCI devices. */
+	if (WARN_ON(!dev_is_pci(dev->dev)))
+		return -EINVAL;
+
+	if (!drm_core_check_feature(dev, DRIVER_HAVE_IRQ))
+		return -EOPNOTSUPP;
+
+	return drm_legacy_pci_irq_by_busid(dev, p);
+}
+
+void drm_legacy_pci_agp_destroy(struct drm_device *dev)
 {
 	if (dev->agp) {
 #ifdef __linux__
@@ -282,13 +173,11 @@ void drm_pci_agp_destroy(struct drm_device *dev)
 	}
 }
 
-#ifdef CONFIG_DRM_LEGACY
-
-static void drm_pci_agp_init(struct drm_device *dev)
+static void drm_legacy_pci_agp_init(struct drm_device *dev)
 {
 	if (drm_core_check_feature(dev, DRIVER_USE_AGP)) {
-		if (pci_find_capability(dev->pdev, PCI_CAP_ID_AGP))
-			dev->agp = drm_agp_init(dev);
+		if (pci_find_capability(to_pci_dev(dev->dev), PCI_CAP_ID_AGP))
+			dev->agp = drm_legacy_agp_init(dev);
 		if (dev->agp) {
 #ifdef __linux__
 			dev->agp->agp_mtrr = arch_phys_wc_add(
@@ -306,9 +195,9 @@ static void drm_pci_agp_init(struct drm_device *dev)
 	}
 }
 
-static int drm_get_pci_dev(struct pci_dev *pdev,
-			   const struct pci_device_id *ent,
-			   struct drm_driver *driver)
+static int drm_legacy_get_pci_dev(struct pci_dev *pdev,
+				  const struct pci_device_id *ent,
+				  const struct drm_driver *driver)
 {
 	struct drm_device *dev;
 	int ret;
@@ -323,29 +212,26 @@ static int drm_get_pci_dev(struct pci_dev *pdev,
 	if (ret)
 		goto err_free;
 
-	dev->pdev = pdev;
 #ifdef __alpha__
 	dev->hose = pdev->sysdata;
 #endif
 
-	if (drm_core_check_feature(dev, DRIVER_MODESET))
-		pci_set_drvdata(pdev, dev);
-
-	drm_pci_agp_init(dev);
+	drm_legacy_pci_agp_init(dev);
 
 	ret = drm_dev_register(dev, ent->driver_data);
 	if (ret)
 		goto err_agp;
 
-	/* No locking needed since shadow-attach is single-threaded since it may
-	 * only be called from the per-driver module init hook. */
-	if (drm_core_check_feature(dev, DRIVER_LEGACY))
-		list_add_tail(&dev->legacy_dev_list, &driver->legacy_dev_list);
+	if (drm_core_check_feature(dev, DRIVER_LEGACY)) {
+		mutex_lock(&legacy_dev_list_lock);
+		list_add_tail(&dev->legacy_dev_list, &legacy_dev_list);
+		mutex_unlock(&legacy_dev_list_lock);
+	}
 
 	return 0;
 
 err_agp:
-	drm_pci_agp_destroy(dev);
+	drm_legacy_pci_agp_destroy(dev);
 	pci_disable_device(pdev);
 err_free:
 	drm_dev_put(dev);
@@ -361,7 +247,8 @@ err_free:
  *
  * Return: 0 on success or a negative error code on failure.
  */
-int drm_legacy_pci_init(struct drm_driver *driver, struct pci_driver *pdriver)
+int drm_legacy_pci_init(const struct drm_driver *driver,
+			struct pci_driver *pdriver)
 {
 #ifdef __linux__
 	struct pci_dev *pdev = NULL;
@@ -374,7 +261,6 @@ int drm_legacy_pci_init(struct drm_driver *driver, struct pci_driver *pdriver)
 		return -EINVAL;
 
 	/* If not using KMS, fall back to stealth mode manual scanning. */
-	INIT_LIST_HEAD(&driver->legacy_dev_list);
 	for (i = 0; pdriver->id_table[i].vendor != 0; i++) {
 		pid = &pdriver->id_table[i];
 
@@ -393,11 +279,11 @@ int drm_legacy_pci_init(struct drm_driver *driver, struct pci_driver *pdriver)
 
 			/* stealth mode requires a manual probe */
 			pci_dev_get(pdev);
-			drm_get_pci_dev(pdev, pid, driver);
+			drm_legacy_get_pci_dev(pdev, pid, driver);
 		}
 	}
-	return 0;
 #endif
+	return 0;
 }
 EXPORT_SYMBOL(drm_legacy_pci_init);
 
@@ -409,7 +295,8 @@ EXPORT_SYMBOL(drm_legacy_pci_init);
  * Unregister a DRM driver shadow-attached through drm_legacy_pci_init(). This
  * is deprecated and only used by dri1 drivers.
  */
-void drm_legacy_pci_exit(struct drm_driver *driver, struct pci_driver *pdriver)
+void drm_legacy_pci_exit(const struct drm_driver *driver,
+			 struct pci_driver *pdriver)
 {
 	struct drm_device *dev, *tmp;
 
@@ -418,11 +305,15 @@ void drm_legacy_pci_exit(struct drm_driver *driver, struct pci_driver *pdriver)
 	if (!(driver->driver_features & DRIVER_LEGACY)) {
 		WARN_ON(1);
 	} else {
-		list_for_each_entry_safe(dev, tmp, &driver->legacy_dev_list,
+		mutex_lock(&legacy_dev_list_lock);
+		list_for_each_entry_safe(dev, tmp, &legacy_dev_list,
 					 legacy_dev_list) {
-			list_del(&dev->legacy_dev_list);
-			drm_put_dev(dev);
+			if (dev->driver == driver) {
+				list_del(&dev->legacy_dev_list);
+				drm_put_dev(dev);
+			}
 		}
+		mutex_unlock(&legacy_dev_list_lock);
 	}
 	DRM_INFO("Module unloaded\n");
 }

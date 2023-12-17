@@ -30,7 +30,7 @@ static void guc_prepare_xfer(struct intel_uncore *uncore)
 	else
 		intel_uncore_write(uncore, GEN9_GT_PM_CONFIG, GT_DOORBELL_ENABLE);
 
-	if (IS_GEN(uncore->i915, 9)) {
+	if (GRAPHICS_VER(uncore->i915) == 9) {
 		/* DOP Clock Gating Enable for GuC clocks */
 		intel_uncore_rmw(uncore, GEN7_MISCCPCTL,
 				 0, GEN8_DOP_CLOCK_GATE_GUC_ENABLE);
@@ -40,19 +40,42 @@ static void guc_prepare_xfer(struct intel_uncore *uncore)
 	}
 }
 
-/* Copy RSA signature from the fw image to HW for verification */
-static void guc_xfer_rsa(struct intel_uc_fw *guc_fw,
-			 struct intel_uncore *uncore)
+static int guc_xfer_rsa_mmio(struct intel_uc_fw *guc_fw,
+			     struct intel_uncore *uncore)
 {
 	u32 rsa[UOS_RSA_SCRATCH_COUNT];
 	size_t copied;
 	int i;
 
 	copied = intel_uc_fw_copy_rsa(guc_fw, rsa, sizeof(rsa));
-	GEM_BUG_ON(copied < sizeof(rsa));
+	if (copied < sizeof(rsa))
+		return -ENOMEM;
 
 	for (i = 0; i < UOS_RSA_SCRATCH_COUNT; i++)
 		intel_uncore_write(uncore, UOS_RSA_SCRATCH(i), rsa[i]);
+
+	return 0;
+}
+
+static int guc_xfer_rsa_vma(struct intel_uc_fw *guc_fw,
+			    struct intel_uncore *uncore)
+{
+	struct intel_guc *guc = container_of(guc_fw, struct intel_guc, fw);
+
+	intel_uncore_write(uncore, UOS_RSA_SCRATCH(0),
+			   intel_guc_ggtt_offset(guc, guc_fw->rsa_data));
+
+	return 0;
+}
+
+/* Copy RSA signature from the fw image to HW for verification */
+static int guc_xfer_rsa(struct intel_uc_fw *guc_fw,
+			struct intel_uncore *uncore)
+{
+	if (guc_fw->rsa_data)
+		return guc_xfer_rsa_vma(guc_fw, uncore);
+	else
+		return guc_xfer_rsa_mmio(guc_fw, uncore);
 }
 
 /*
@@ -88,17 +111,29 @@ static int guc_wait_ucode(struct intel_uncore *uncore)
 	 * attempt the ucode load again if this happens.)
 	 */
 	ret = wait_for(guc_ready(uncore, &status), 100);
-	DRM_DEBUG_DRIVER("GuC status %#x\n", status);
+	if (ret) {
+		struct drm_device *drm = &uncore->i915->drm;
 
-	if ((status & GS_BOOTROM_MASK) == GS_BOOTROM_RSA_FAILED) {
-		DRM_ERROR("GuC firmware signature verification failed\n");
-		ret = -ENOEXEC;
-	}
+		drm_dbg(drm, "GuC load failed: status = 0x%08X\n", status);
+		drm_dbg(drm, "GuC load failed: status: Reset = %d, "
+			"BootROM = 0x%02X, UKernel = 0x%02X, "
+			"MIA = 0x%02X, Auth = 0x%02X\n",
+			REG_FIELD_GET(GS_MIA_IN_RESET, status),
+			REG_FIELD_GET(GS_BOOTROM_MASK, status),
+			REG_FIELD_GET(GS_UKERNEL_MASK, status),
+			REG_FIELD_GET(GS_MIA_MASK, status),
+			REG_FIELD_GET(GS_AUTH_STATUS_MASK, status));
 
-	if ((status & GS_UKERNEL_MASK) == GS_UKERNEL_EXCEPTION) {
-		DRM_ERROR("GuC firmware exception. EIP: %#x\n",
-			  intel_uncore_read(uncore, SOFT_SCRATCH(13)));
-		ret = -ENXIO;
+		if ((status & GS_BOOTROM_MASK) == GS_BOOTROM_RSA_FAILED) {
+			drm_dbg(drm, "GuC firmware signature verification failed\n");
+			ret = -ENOEXEC;
+		}
+
+		if ((status & GS_UKERNEL_MASK) == GS_UKERNEL_EXCEPTION) {
+			drm_dbg(drm, "GuC firmware exception. EIP: %#x\n",
+				intel_uncore_read(uncore, SOFT_SCRATCH(13)));
+			ret = -ENXIO;
+		}
 	}
 
 	return ret;
@@ -127,9 +162,14 @@ int intel_guc_fw_upload(struct intel_guc *guc)
 	/*
 	 * Note that GuC needs the CSS header plus uKernel code to be copied
 	 * by the DMA engine in one operation, whereas the RSA signature is
-	 * loaded via MMIO.
+	 * loaded separately, either by copying it to the UOS_RSA_SCRATCH
+	 * register (if key size <= 256) or through a ggtt-pinned vma (if key
+	 * size > 256). The RSA size and therefore the way we provide it to the
+	 * HW is fixed for each platform and hard-coded in the bootrom.
 	 */
-	guc_xfer_rsa(&guc->fw, uncore);
+	ret = guc_xfer_rsa(&guc->fw, uncore);
+	if (ret)
+		goto out;
 
 	/*
 	 * Current uCode expects the code to be loaded at 8k; locations below
@@ -147,6 +187,6 @@ int intel_guc_fw_upload(struct intel_guc *guc)
 	return 0;
 
 out:
-	intel_uc_fw_change_status(&guc->fw, INTEL_UC_FIRMWARE_FAIL);
+	intel_uc_fw_change_status(&guc->fw, INTEL_UC_FIRMWARE_LOAD_FAIL);
 	return ret;
 }

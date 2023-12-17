@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: MIT
  *
- * Copyright � 2008-2018 Intel Corporation
+ * Copyright © 2008-2018 Intel Corporation
  */
 
 #ifndef _I915_GPU_ERROR_H_
@@ -29,7 +29,6 @@ struct drm_i915_private;
 struct i915_vma_compress;
 struct intel_engine_capture_vma;
 struct intel_overlay_error_state;
-struct intel_display_error_state;
 
 struct i915_vma_coredump {
 	struct i915_vma_coredump *next;
@@ -40,10 +39,12 @@ struct i915_vma_coredump {
 	u64 gtt_size;
 	u32 gtt_page_sizes;
 
-	int num_pages;
-	int page_count;
 	int unused;
-	u32 *pages[];
+#ifdef __linux__
+	struct list_head page_list;
+#elif defined(__FreeBSD__)
+	struct pglist page_list;
+#endif
 };
 
 struct i915_request_coredump {
@@ -59,6 +60,7 @@ struct i915_request_coredump {
 struct intel_engine_coredump {
 	const struct intel_engine_cs *engine;
 
+	bool hung;
 	bool simulated;
 	u32 reset_count;
 
@@ -181,7 +183,6 @@ struct i915_gpu_coredump {
 	struct i915_params params;
 
 	struct intel_overlay_error_state *overlay;
-	struct intel_display_error_state *display;
 
 	struct scatterlist *sgl, *fit;
 };
@@ -218,8 +219,10 @@ struct drm_i915_error_state_buf {
 __printf(2, 3)
 void i915_error_printf(struct drm_i915_error_state_buf *e, const char *f, ...);
 
-struct i915_gpu_coredump *i915_gpu_coredump(struct drm_i915_private *i915);
-void i915_capture_error_state(struct drm_i915_private *i915);
+struct i915_gpu_coredump *i915_gpu_coredump(struct intel_gt *gt,
+					    intel_engine_mask_t engine_mask);
+void i915_capture_error_state(struct intel_gt *gt,
+			      intel_engine_mask_t engine_mask);
 
 struct i915_gpu_coredump *
 i915_gpu_coredump_alloc(struct drm_i915_private *i915, gfp_t gfp);
@@ -271,7 +274,8 @@ void i915_disable_error_state(struct drm_i915_private *i915, int err);
 
 #else
 
-static inline void i915_capture_error_state(struct drm_i915_private *i915)
+static inline void
+i915_capture_error_state(struct intel_gt *gt, intel_engine_mask_t engine_mask)
 {
 }
 

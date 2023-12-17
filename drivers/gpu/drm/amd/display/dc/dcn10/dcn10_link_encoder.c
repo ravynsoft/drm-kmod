@@ -480,7 +480,6 @@ unsigned int dcn10_get_dig_frontend(struct link_encoder *enc)
 		break;
 	default:
 		// invalid source select DIG
-		ASSERT(false);
 		result = ENGINE_ID_UNKNOWN;
 	}
 
@@ -647,8 +646,9 @@ static bool dcn10_link_encoder_validate_hdmi_output(
 			crtc_timing->pixel_encoding == PIXEL_ENCODING_YCBCR420)
 		return false;
 
-	if (!enc10->base.features.flags.bits.HDMI_6GB_EN &&
-		adjusted_pix_clk_100hz >= 3000000)
+	if ((!enc10->base.features.flags.bits.HDMI_6GB_EN ||
+			enc10->base.ctx->dc->debug.hdmi20_disable) &&
+			adjusted_pix_clk_100hz >= 3000000)
 		return false;
 	if (enc10->base.ctx->dc->debug.hdmi20_disable &&
 		crtc_timing->pixel_encoding == PIXEL_ENCODING_YCBCR420)
@@ -954,6 +954,21 @@ void dcn10_link_encoder_enable_tmds_output(
 			__func__);
 		BREAK_TO_DEBUGGER();
 	}
+}
+
+void dcn10_link_encoder_enable_tmds_output_with_clk_pattern_wa(
+	struct link_encoder *enc,
+	enum clock_source_id clock_source,
+	enum dc_color_depth color_depth,
+	enum signal_type signal,
+	uint32_t pixel_clock)
+{
+	struct dcn10_link_encoder *enc10 = TO_DCN10_LINK_ENC(enc);
+
+	dcn10_link_encoder_enable_tmds_output(
+		enc, clock_source, color_depth, signal, pixel_clock);
+
+	REG_UPDATE(DIG_CLOCK_PATTERN, DIG_CLOCK_PATTERN, 0x1F);
 }
 
 /* enables DP PHY output */
@@ -1445,6 +1460,15 @@ void dcn10_link_encoder_get_max_link_cap(struct link_encoder *enc,
 
 	if (enc->features.flags.bits.IS_HBR3_CAPABLE)
 		max_link_cap.link_rate = LINK_RATE_HIGH3;
+
+	if (enc->features.flags.bits.IS_UHBR10_CAPABLE)
+		max_link_cap.link_rate = LINK_RATE_UHBR10;
+
+	if (enc->features.flags.bits.IS_UHBR13_5_CAPABLE)
+		max_link_cap.link_rate = LINK_RATE_UHBR13_5;
+
+	if (enc->features.flags.bits.IS_UHBR20_CAPABLE)
+		max_link_cap.link_rate = LINK_RATE_UHBR20;
 
 	*link_settings = max_link_cap;
 }

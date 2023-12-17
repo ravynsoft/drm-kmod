@@ -47,11 +47,16 @@ bool amdgpu_virt_mmio_blocked(struct amdgpu_device *adev)
 
 void amdgpu_virt_init_setting(struct amdgpu_device *adev)
 {
+	struct drm_device *ddev = adev_to_drm(adev);
+
 	/* enable virtual display */
-	if (adev->mode_info.num_crtc == 0)
-		adev->mode_info.num_crtc = 1;
-	adev->enable_virtual_display = true;
-	adev_to_drm(adev)->driver->driver_features &= ~DRIVER_ATOMIC;
+	if (adev->asic_type != CHIP_ALDEBARAN &&
+	    adev->asic_type != CHIP_ARCTURUS) {
+		if (adev->mode_info.num_crtc == 0)
+			adev->mode_info.num_crtc = 1;
+		adev->enable_virtual_display = true;
+	}
+	ddev->driver_features &= ~DRIVER_ATOMIC;
 	adev->cg_flags = 0;
 	adev->pg_flags = 0;
 }
@@ -104,7 +109,7 @@ failed_kiq:
 
 /**
  * amdgpu_virt_request_full_gpu() - request full gpu access
- * @amdgpu:	amdgpu device.
+ * @adev:	amdgpu device.
  * @init:	is driver init time.
  * When start to init/fini driver, first need to request full gpu access.
  * Return: Zero if request success, otherwise will return error.
@@ -127,7 +132,7 @@ int amdgpu_virt_request_full_gpu(struct amdgpu_device *adev, bool init)
 
 /**
  * amdgpu_virt_release_full_gpu() - release full gpu access
- * @amdgpu:	amdgpu device.
+ * @adev:	amdgpu device.
  * @init:	is driver init time.
  * When finishing driver init/fini, need to release full gpu access.
  * Return: Zero if release success, otherwise will returen error.
@@ -149,7 +154,7 @@ int amdgpu_virt_release_full_gpu(struct amdgpu_device *adev, bool init)
 
 /**
  * amdgpu_virt_reset_gpu() - reset gpu
- * @amdgpu:	amdgpu device.
+ * @adev:	amdgpu device.
  * Send reset command to GPU hypervisor to reset GPU that VM is using
  * Return: Zero if reset success, otherwise will return error.
  */
@@ -184,7 +189,7 @@ void amdgpu_virt_request_init_data(struct amdgpu_device *adev)
 
 /**
  * amdgpu_virt_wait_reset() - wait for reset gpu completed
- * @amdgpu:	amdgpu device.
+ * @adev:	amdgpu device.
  * Wait for GPU reset completed.
  * Return: Zero if reset success, otherwise will return error.
  */
@@ -200,7 +205,7 @@ int amdgpu_virt_wait_reset(struct amdgpu_device *adev)
 
 /**
  * amdgpu_virt_alloc_mm_table() - alloc memory for mm table
- * @amdgpu:	amdgpu device.
+ * @adev:	amdgpu device.
  * MM table is used by UVD and VCE for its initialization
  * Return: Zero if allocate success.
  */
@@ -230,7 +235,7 @@ int amdgpu_virt_alloc_mm_table(struct amdgpu_device *adev)
 
 /**
  * amdgpu_virt_free_mm_table() - free mm table memory
- * @amdgpu:	amdgpu device.
+ * @adev:	amdgpu device.
  * Free MM table memory
  */
 void amdgpu_virt_free_mm_table(struct amdgpu_device *adev)
@@ -278,17 +283,15 @@ static int amdgpu_virt_init_ras_err_handler_data(struct amdgpu_device *adev)
 
 	*data = kmalloc(sizeof(struct amdgpu_virt_ras_err_handler_data), GFP_KERNEL);
 	if (!*data)
-		return -ENOMEM;
+		goto data_failure;
 
-	bps = kmalloc(align_space * sizeof((*data)->bps), GFP_KERNEL);
-	bps_bo = kmalloc(align_space * sizeof((*data)->bps_bo), GFP_KERNEL);
+	bps = kmalloc_array(align_space, sizeof((*data)->bps), GFP_KERNEL);
+	if (!bps)
+		goto bps_failure;
 
-	if (!bps || !bps_bo) {
-		kfree(bps);
-		kfree(bps_bo);
-		kfree(*data);
-		return -ENOMEM;
-	}
+	bps_bo = kmalloc_array(align_space, sizeof((*data)->bps_bo), GFP_KERNEL);
+	if (!bps_bo)
+		goto bps_bo_failure;
 
 	(*data)->bps = bps;
 	(*data)->bps_bo = bps_bo;
@@ -298,6 +301,13 @@ static int amdgpu_virt_init_ras_err_handler_data(struct amdgpu_device *adev)
 	virt->ras_init_done = true;
 
 	return 0;
+
+bps_bo_failure:
+	kfree(bps);
+bps_failure:
+	kfree(*data);
+data_failure:
+	return -ENOMEM;
 }
 
 static void amdgpu_virt_ras_release_bp(struct amdgpu_device *adev)
@@ -427,6 +437,9 @@ static int amdgpu_virt_read_pf2vf_data(struct amdgpu_device *adev)
 	uint32_t checksum;
 	uint32_t checkval;
 
+	uint32_t i;
+	uint32_t tmp;
+
 	if (adev->virt.fw_reserve.p_pf2vf == NULL)
 		return -EINVAL;
 
@@ -464,7 +477,32 @@ static int amdgpu_virt_read_pf2vf_data(struct amdgpu_device *adev)
 			((struct amd_sriov_msg_pf2vf_info *)pf2vf_info)->vf2pf_update_interval_ms;
 		adev->virt.gim_feature =
 			((struct amd_sriov_msg_pf2vf_info *)pf2vf_info)->feature_flags.all;
+		adev->virt.reg_access =
+			((struct amd_sriov_msg_pf2vf_info *)pf2vf_info)->reg_access_flags.all;
 
+		adev->virt.decode_max_dimension_pixels = 0;
+		adev->virt.decode_max_frame_pixels = 0;
+		adev->virt.encode_max_dimension_pixels = 0;
+		adev->virt.encode_max_frame_pixels = 0;
+		adev->virt.is_mm_bw_enabled = false;
+		for (i = 0; i < AMD_SRIOV_MSG_RESERVE_VCN_INST; i++) {
+			tmp = ((struct amd_sriov_msg_pf2vf_info *)pf2vf_info)->mm_bw_management[i].decode_max_dimension_pixels;
+			adev->virt.decode_max_dimension_pixels = max(tmp, adev->virt.decode_max_dimension_pixels);
+
+			tmp = ((struct amd_sriov_msg_pf2vf_info *)pf2vf_info)->mm_bw_management[i].decode_max_frame_pixels;
+			adev->virt.decode_max_frame_pixels = max(tmp, adev->virt.decode_max_frame_pixels);
+
+			tmp = ((struct amd_sriov_msg_pf2vf_info *)pf2vf_info)->mm_bw_management[i].encode_max_dimension_pixels;
+			adev->virt.encode_max_dimension_pixels = max(tmp, adev->virt.encode_max_dimension_pixels);
+
+			tmp = ((struct amd_sriov_msg_pf2vf_info *)pf2vf_info)->mm_bw_management[i].encode_max_frame_pixels;
+			adev->virt.encode_max_frame_pixels = max(tmp, adev->virt.encode_max_frame_pixels);
+		}
+		if((adev->virt.decode_max_dimension_pixels > 0) || (adev->virt.encode_max_dimension_pixels > 0))
+			adev->virt.is_mm_bw_enabled = true;
+
+		adev->unique_id =
+			((struct amd_sriov_msg_pf2vf_info *)pf2vf_info)->uuid;
 		break;
 	default:
 		DRM_ERROR("invalid pf2vf version\n");
@@ -498,10 +536,13 @@ static void amdgpu_virt_populate_vf2pf_ucode_info(struct amdgpu_device *adev)
 	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_RLC_SRLS, adev->gfx.rlc_srls_fw_version);
 	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_MEC,      adev->gfx.mec_fw_version);
 	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_MEC2,     adev->gfx.mec2_fw_version);
-	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_SOS,      adev->psp.sos_fw_version);
-	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_ASD,      adev->psp.asd_fw_version);
-	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_TA_RAS,   adev->psp.ta_ras_ucode_version);
-	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_TA_XGMI,  adev->psp.ta_xgmi_ucode_version);
+	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_SOS,      adev->psp.sos.fw_version);
+	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_ASD,
+			    adev->psp.asd_context.bin_desc.fw_version);
+	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_TA_RAS,
+			    adev->psp.ras_context.context.bin_desc.fw_version);
+	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_TA_XGMI,
+			    adev->psp.xgmi_context.context.bin_desc.fw_version);
 	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_SMC,      adev->pm.fw_version);
 	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_SDMA,     adev->sdma.instance[0].fw_version);
 	POPULATE_UCODE_INFO(vf2pf_info, AMD_SRIOV_UCODE_ID_SDMA2,    adev->sdma.instance[1].fw_version);
@@ -512,7 +553,6 @@ static void amdgpu_virt_populate_vf2pf_ucode_info(struct amdgpu_device *adev)
 static int amdgpu_virt_write_vf2pf_data(struct amdgpu_device *adev)
 {
 	struct amd_sriov_msg_vf2pf_info *vf2pf_info;
-	struct ttm_resource_manager *vram_man = ttm_manager_type(&adev->mman.bdev, TTM_PL_VRAM);
 
 	vf2pf_info = (struct amd_sriov_msg_vf2pf_info *) adev->virt.fw_reserve.p_vf2pf;
 
@@ -535,8 +575,8 @@ static int amdgpu_virt_write_vf2pf_data(struct amdgpu_device *adev)
 	vf2pf_info->driver_cert = 0;
 	vf2pf_info->os_info.all = 0;
 
-	vf2pf_info->fb_usage = amdgpu_vram_mgr_usage(vram_man) >> 20;
-	vf2pf_info->fb_vis_usage = amdgpu_vram_mgr_vis_usage(vram_man) >> 20;
+	vf2pf_info->fb_usage = amdgpu_vram_mgr_usage(&adev->mman.vram_mgr) >> 20;
+	vf2pf_info->fb_vis_usage = amdgpu_vram_mgr_vis_usage(&adev->mman.vram_mgr) >> 20;
 	vf2pf_info->fb_size = adev->gmc.real_vram_size >> 20;
 	vf2pf_info->fb_vis_size = adev->gmc.visible_vram_size >> 20;
 
@@ -548,6 +588,7 @@ static int amdgpu_virt_write_vf2pf_data(struct amdgpu_device *adev)
 	vf2pf_info->encode_usage = 0;
 	vf2pf_info->decode_usage = 0;
 
+	vf2pf_info->dummy_page_addr = (uint64_t)adev->dummy_page_addr;
 	vf2pf_info->checksum =
 		amd_sriov_msg_checksum(
 		vf2pf_info, vf2pf_info->header.size, 0, 0);
@@ -555,13 +596,17 @@ static int amdgpu_virt_write_vf2pf_data(struct amdgpu_device *adev)
 	return 0;
 }
 
-void amdgpu_virt_update_vf2pf_work_item(struct work_struct *work)
+static void amdgpu_virt_update_vf2pf_work_item(struct work_struct *work)
 {
 	struct amdgpu_device *adev = container_of(work, struct amdgpu_device, virt.vf2pf_work.work);
+	int ret;
 
-	amdgpu_virt_read_pf2vf_data(adev);
+	ret = amdgpu_virt_read_pf2vf_data(adev);
+	if (ret)
+		goto out;
 	amdgpu_virt_write_vf2pf_data(adev);
 
+out:
 	schedule_delayed_work(&(adev->virt.vf2pf_work), adev->virt.vf2pf_update_interval_ms);
 }
 
@@ -569,23 +614,41 @@ void amdgpu_virt_fini_data_exchange(struct amdgpu_device *adev)
 {
 	if (adev->virt.vf2pf_update_interval_ms != 0) {
 		DRM_INFO("clean up the vf2pf work item\n");
-		flush_delayed_work(&adev->virt.vf2pf_work);
 		cancel_delayed_work_sync(&adev->virt.vf2pf_work);
+		adev->virt.vf2pf_update_interval_ms = 0;
 	}
 }
 
 void amdgpu_virt_init_data_exchange(struct amdgpu_device *adev)
 {
-	uint64_t bp_block_offset = 0;
-	uint32_t bp_block_size = 0;
-	struct amd_sriov_msg_pf2vf_info *pf2vf_v2 = NULL;
-
 	adev->virt.fw_reserve.p_pf2vf = NULL;
 	adev->virt.fw_reserve.p_vf2pf = NULL;
 	adev->virt.vf2pf_update_interval_ms = 0;
 
 	if (adev->mman.fw_vram_usage_va != NULL) {
-		adev->virt.vf2pf_update_interval_ms = 2000;
+		/* go through this logic in ip_init and reset to init workqueue*/
+		amdgpu_virt_exchange_data(adev);
+
+		INIT_DELAYED_WORK(&adev->virt.vf2pf_work, amdgpu_virt_update_vf2pf_work_item);
+		schedule_delayed_work(&(adev->virt.vf2pf_work), msecs_to_jiffies(adev->virt.vf2pf_update_interval_ms));
+	} else if (adev->bios != NULL) {
+		/* got through this logic in early init stage to get necessary flags, e.g. rlcg_acc related*/
+		adev->virt.fw_reserve.p_pf2vf =
+			(struct amd_sriov_msg_pf2vf_info_header *)
+			(adev->bios + (AMD_SRIOV_MSG_PF2VF_OFFSET_KB << 10));
+
+		amdgpu_virt_read_pf2vf_data(adev);
+	}
+}
+
+
+void amdgpu_virt_exchange_data(struct amdgpu_device *adev)
+{
+	uint64_t bp_block_offset = 0;
+	uint32_t bp_block_size = 0;
+	struct amd_sriov_msg_pf2vf_info *pf2vf_v2 = NULL;
+
+	if (adev->mman.fw_vram_usage_va != NULL) {
 
 		adev->virt.fw_reserve.p_pf2vf =
 			(struct amd_sriov_msg_pf2vf_info_header *)
@@ -612,12 +675,8 @@ void amdgpu_virt_init_data_exchange(struct amdgpu_device *adev)
 					amdgpu_virt_add_bad_page(adev, bp_block_offset, bp_block_size);
 			}
 	}
-
-	if (adev->virt.vf2pf_update_interval_ms != 0) {
-		INIT_DELAYED_WORK(&adev->virt.vf2pf_work, amdgpu_virt_update_vf2pf_work_item);
-		schedule_delayed_work(&(adev->virt.vf2pf_work), adev->virt.vf2pf_update_interval_ms);
-	}
 }
+
 
 void amdgpu_detect_virtualization(struct amdgpu_device *adev)
 {
@@ -634,6 +693,7 @@ void amdgpu_detect_virtualization(struct amdgpu_device *adev)
 	case CHIP_NAVI12:
 	case CHIP_SIENNA_CICHLID:
 	case CHIP_ARCTURUS:
+	case CHIP_ALDEBARAN:
 		reg = RREG32(mmRCC_IOV_FUNC_IDENTIFIER);
 		break;
 	default: /* other chip doesn't support SRIOV */
@@ -660,8 +720,13 @@ void amdgpu_detect_virtualization(struct amdgpu_device *adev)
 			vi_set_virt_ops(adev);
 			break;
 		case CHIP_VEGA10:
+			soc15_set_virt_ops(adev);
+			/* send a dummy GPU_INIT_DATA request to host on vega10 */
+			amdgpu_virt_request_init_data(adev);
+			break;
 		case CHIP_VEGA20:
 		case CHIP_ARCTURUS:
+		case CHIP_ALDEBARAN:
 			soc15_set_virt_ops(adev);
 			break;
 		case CHIP_NAVI10:
@@ -722,4 +787,36 @@ enum amdgpu_sriov_vf_mode amdgpu_virt_get_sriov_vf_mode(struct amdgpu_device *ad
 	}
 
 	return mode;
+}
+
+void amdgpu_virt_update_sriov_video_codec(struct amdgpu_device *adev,
+			struct amdgpu_video_codec_info *encode, uint32_t encode_array_size,
+			struct amdgpu_video_codec_info *decode, uint32_t decode_array_size)
+{
+	uint32_t i;
+
+	if (!adev->virt.is_mm_bw_enabled)
+		return;
+
+	if (encode) {
+		for (i = 0; i < encode_array_size; i++) {
+			encode[i].max_width = adev->virt.encode_max_dimension_pixels;
+			encode[i].max_pixels_per_frame = adev->virt.encode_max_frame_pixels;
+			if (encode[i].max_width > 0)
+				encode[i].max_height = encode[i].max_pixels_per_frame / encode[i].max_width;
+			else
+				encode[i].max_height = 0;
+		}
+	}
+
+	if (decode) {
+		for (i = 0; i < decode_array_size; i++) {
+			decode[i].max_width = adev->virt.decode_max_dimension_pixels;
+			decode[i].max_pixels_per_frame = adev->virt.decode_max_frame_pixels;
+			if (decode[i].max_width > 0)
+				decode[i].max_height = decode[i].max_pixels_per_frame / decode[i].max_width;
+			else
+				decode[i].max_height = 0;
+		}
+	}
 }

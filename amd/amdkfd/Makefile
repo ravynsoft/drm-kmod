@@ -41,6 +41,7 @@ CLEANFILES+= ${KMOD}.ko.full ${KMOD}.ko.debug
 CFLAGS+= -I${.CURDIR:H:H}/linuxkpi/gplv2/include
 CFLAGS+= -I${SYSDIR}/compat/linuxkpi/common/include
 CFLAGS+= -I${.CURDIR:H:H}/linuxkpi/dummy/include
+CFLAGS+= -I${SYSDIR}/compat/linuxkpi/dummy/include
 
 CFLAGS+= -I${.CURDIR:H:H}/include
 CFLAGS+= -I${.CURDIR:H:H}/include/drm
@@ -58,7 +59,7 @@ CFLAGS+= '-DLINUXKPI_PARAM_PREFIX=amdkfd_'
 CFLAGS+= '-DKBUILD_MODNAME="${KMOD}"'
 
 SRCS+=	device_if.h vnode_if.h bus_if.h pci_if.h pci_iov_if.h device_if.h iicbus_if.h opt_drm.h \
-	opt_vm.h opt_compat.h opt_syscons.h
+	opt_vm.h opt_syscons.h
 
 .include <bsd.kmod.mk>
 

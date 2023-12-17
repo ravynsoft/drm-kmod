@@ -43,7 +43,7 @@
 #include <linux/rcupdate.h>
 
 #include <drm/drm_hashtab.h>
-#include <drm/ttm/ttm_memory.h>
+#include <drm/ttm/ttm_set_memory.h>
 
 /**
  * enum ttm_ref_type

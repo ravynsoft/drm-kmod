@@ -5,6 +5,7 @@ SRCDIR=	${.CURDIR:H}/drivers/gpu/drm/radeon
 .PATH:	${SRCDIR}
 
 .include "../kconfig.mk"
+.include "../linuxkpi_version.mk"
 
 KMOD=	radeonkms
 SRCS=	atom.c \
@@ -124,6 +125,7 @@ CLEANFILES+= ${KMOD}.ko.full ${KMOD}.ko.debug
 CFLAGS+= -I${.CURDIR:H}/linuxkpi/gplv2/include
 CFLAGS+= -I${.CURDIR:H}/linuxkpi/bsd/include
 CFLAGS+= -I${SYSDIR}/compat/linuxkpi/common/include
+CFLAGS+= -I${SYSDIR}/compat/linuxkpi/dummy/include
 CFLAGS+= -I${.CURDIR:H}/linuxkpi/dummy/include
 
 CFLAGS+= -I${.CURDIR:H}/include
@@ -133,14 +135,14 @@ CFLAGS+= -I${SRCDIR:H:H}
 CFLAGS+= -I${SRCDIR:H}/amd/include
 
 CFLAGS+= '-DKBUILD_MODNAME="${KMOD}"'
-CFLAGS+= '-DLINUXKPI_PARAM_PREFIX=radeon_' -DDRM_SYSCTL_PARAM_PREFIX=_${KMOD} -DLINUXKPI_VERSION=50000
+CFLAGS+= '-DLINUXKPI_PARAM_PREFIX=radeon_' -DDRM_SYSCTL_PARAM_PREFIX=_${KMOD}
 CFLAGS+= ${KCONFIG:C/(.*)/-DCONFIG_\1/}
 
 CFLAGS.gcc+= -Wno-redundant-decls -Wno-cast-qual -Wno-unused-but-set-variable \
 	-Wno-maybe-uninitialized
 
 SRCS+=	device_if.h vnode_if.h bus_if.h pci_if.h pci_iov_if.h device_if.h iicbus_if.h opt_drm.h \
-	opt_vm.h opt_compat.h opt_syscons.h
+	opt_vm.h opt_syscons.h
 
 .include <bsd.kmod.mk>
 
@@ -150,7 +152,7 @@ CWARNFLAGS+=			-Wno-pointer-arith ${CWARNFLAGS.${.IMPSRC:T}}
 
 CWARNFLAGS.atombios_encoders.c=		-Wno-missing-prototypes
 CWARNFLAGS.atombios_i2c.c=		-Wno-missing-prototypes
-CWARNFLAGS.ci_dpm.c=			-Wno-unused-const-variable -Wno-unused-but-set-variable
+CWARNFLAGS.ci_dpm.c=			-Wno-unused-const-variable -Wno-unused-but-set-variable -Wno-gnu-variable-sized-type-not-at-end
 CWARNFLAGS.cik.c=			-Wno-missing-prototypes -Wno-cast-qual -Wno-unused-but-set-variable
 CWARNFLAGS.cik_sdma.c=			-Wno-missing-prototypes
 CWARNFLAGS.dce3_1_afmt.c=		-Wno-missing-prototypes
@@ -159,7 +161,7 @@ CWARNFLAGS.evergreen.c=			-Wno-missing-prototypes -Wno-cast-qual -Wno-unused-but
 CWARNFLAGS.evergreen_hdmi.c=		-Wno-missing-prototypes
 CWARNFLAGS.kv_dpm.c=			-Wno-unused-const-variable
 CWARNFLAGS.ni.c=			-Wno-missing-prototypes -Wno-cast-qual -Wno-unused-but-set-variable
-CWARNFLAGS.ni_dpm.c=			-Wno-missing-prototypes
+CWARNFLAGS.ni_dpm.c=			-Wno-missing-prototypes -Wno-gnu-variable-sized-type-not-at-end
 CWARNFLAGS.r600.c=			-Wno-missing-prototypes -Wno-cast-qual -Wno-unused-but-set-variable
 CWARNFLAGS.r600_cs.c=			-Wno-missing-prototypes
 CWARNFLAGS.r600_hdmi.c=			-Wno-missing-prototypes
@@ -181,7 +183,8 @@ CWARNFLAGS.radeon_uvd.c=		-Wno-cast-qual
 CWARNFLAGS.rv770.c=			-Wno-missing-prototypes
 CWARNFLAGS.rv770_dpm.c=			-Wno-missing-prototypes
 CWARNFLAGS.si.c=			-Wno-missing-prototypes -Wno-cast-qual -Wno-unused-but-set-variable
-CWARNFLAGS.si_dpm.c=			-Wno-missing-prototypes -Wno-unused-const-variable
+CWARNFLAGS.si_dpm.c=			-Wno-missing-prototypes -Wno-unused-const-variable -Wno-gnu-variable-sized-type-not-at-end
+CWARNFLAGS.si_smc.c=			-Wno-gnu-variable-sized-type-not-at-end
 CWARNFLAGS.sumo_dpm.c=			-Wno-missing-prototypes
 CWARNFLAGS.trinity_dpm.c=		-Wno-unused-const-variable
 CWARNFLAGS.vce_v1_0.c=			-Wno-missing-prototypes -Wno-cast-qual

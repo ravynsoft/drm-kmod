@@ -61,7 +61,7 @@ static void amdgpu_bo_list_free(struct kref *ref)
 
 int amdgpu_bo_list_create(struct amdgpu_device *adev, struct drm_file *filp,
 			  struct drm_amdgpu_bo_list_entry *info,
-			  unsigned num_entries, struct amdgpu_bo_list **result)
+			  size_t num_entries, struct amdgpu_bo_list **result)
 {
 	unsigned last_entry = 0, first_userptr = num_entries;
 	struct amdgpu_bo_list_entry *array;
@@ -71,7 +71,7 @@ int amdgpu_bo_list_create(struct amdgpu_device *adev, struct drm_file *filp,
 	unsigned i;
 	int r;
 
-	if ((long)num_entries > (SIZE_MAX - sizeof(struct amdgpu_bo_list))
+	if (num_entries > (SIZE_MAX - sizeof(struct amdgpu_bo_list))
 				/ sizeof(struct amdgpu_bo_list_entry))
 		return -EINVAL;
 

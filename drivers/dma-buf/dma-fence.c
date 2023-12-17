@@ -25,6 +25,7 @@
  */
 
 #include <linux/dma-fence.h>
+#include <linux/seq_file.h>
 
 MALLOC_DECLARE(M_DMABUF);
 
@@ -63,6 +64,21 @@ dma_fence_get_stub(void)
 	return (dma_fence_get(&dma_fence_stub));
 }
 
+struct dma_fence *dma_fence_allocate_private_stub(void)
+{
+	struct dma_fence *fence;
+
+	fence = kzalloc(sizeof(*fence), GFP_KERNEL);
+	if (fence == NULL)
+		return (ERR_PTR(-ENOMEM));
+
+	dma_fence_init(fence,
+	    &dma_fence_stub_ops, &dma_fence_stub_lock, 0, 0);
+	dma_fence_signal(fence);
+
+	return (fence);
+}
+
 static atomic64_t dma_fence_context_counter = ATOMIC64_INIT(1);
 
 /*
@@ -79,7 +95,8 @@ dma_fence_context_alloc(unsigned num)
  * signal completion of a fence
  */
 int
-dma_fence_signal_locked(struct dma_fence *fence)
+dma_fence_signal_timestamp_locked(struct dma_fence *fence,
+				  ktime_t timestamp)
 {
 	struct dma_fence_cb *cur, *tmp;
 	struct list_head cb_list;
@@ -92,7 +109,7 @@ dma_fence_signal_locked(struct dma_fence *fence)
 
 	list_replace(&fence->cb_list, &cb_list);
 
-	fence->timestamp = ktime_get();
+	fence->timestamp = timestamp;
 	set_bit(DMA_FENCE_FLAG_TIMESTAMP_BIT, &fence->flags);
 
 	list_for_each_entry_safe(cur, tmp, &cb_list, node) {
@@ -107,6 +124,32 @@ dma_fence_signal_locked(struct dma_fence *fence)
  * signal completion of a fence
  */
 int
+dma_fence_signal_timestamp(struct dma_fence *fence, ktime_t timestamp)
+{
+	int rv;
+
+	if (fence == NULL)
+		return (-EINVAL);
+
+	spin_lock(fence->lock);
+	rv = dma_fence_signal_timestamp_locked(fence, timestamp);
+	spin_unlock(fence->lock);
+	return (rv);
+}
+
+/*
+ * signal completion of a fence
+ */
+int
+dma_fence_signal_locked(struct dma_fence *fence)
+{
+	return dma_fence_signal_timestamp_locked(fence, ktime_get());
+}
+
+/*
+ * signal completion of a fence
+ */
+int
 dma_fence_signal(struct dma_fence *fence)
 {
 	int rv;
@@ -115,7 +158,7 @@ dma_fence_signal(struct dma_fence *fence)
 		return (-EINVAL);
 
 	spin_lock(fence->lock);
-	rv = dma_fence_signal_locked(fence);
+	rv = dma_fence_signal_timestamp_locked(fence, ktime_get());
 	spin_unlock(fence->lock);
 	return (rv);
 }
@@ -373,7 +416,7 @@ dma_fence_wait_any_timeout(struct dma_fence **fences, uint32_t count,
 		return (0);
 	}
 
-	cb = malloc(sizeof(*cb), M_DMABUF, M_WAITOK | M_ZERO);
+	cb = mallocarray(count, sizeof(*cb), M_DMABUF, M_WAITOK | M_ZERO);
 	for (i = 0; i < count; i++) {
 		struct dma_fence *fence = fences[i];
 		cb[i].task = current;
@@ -407,6 +450,15 @@ cb_cleanup:
 		dma_fence_remove_callback(fences[i], &cb[i].base);
 	free(cb, M_DMABUF);
 	return (rv);
+}
+
+void
+dma_fence_describe(struct dma_fence *fence, struct seq_file *seq)
+{
+	seq_printf(seq, "%s %s seq %llu %ssignalled\n",
+		   fence->ops->get_driver_name(fence),
+		   fence->ops->get_timeline_name(fence), fence->seqno,
+		   dma_fence_is_signaled(fence) ? "" : "un");
 }
 
 /*

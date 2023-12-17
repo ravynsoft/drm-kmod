@@ -30,12 +30,18 @@
 #include <drm/drm_connector.h>
 #include <drm/drm_device.h>
 #include <drm/drm_print.h>
+#include <drm/drm_property.h>
 #include <drm/drm_sysfs.h>
 
 #include "drm_internal.h"
+#include "drm_crtc_internal.h"
 
 static struct device_type drm_sysfs_device_minor = {
 	.name = "drm_minor"
+};
+
+static struct device_type drm_sysfs_device_connector = {
+	.name = "drm_connector",
 };
 
 struct class *drm_class;
@@ -79,6 +85,37 @@ void drm_sysfs_hotplug_event(struct drm_device *dev)
 	sbuf_delete(sb);
 }
 
+void drm_sysfs_connector_hotplug_event(struct drm_connector *connector)
+{
+	struct drm_device *dev = connector->dev;
+	struct sbuf *sb = sbuf_new_auto();
+
+	drm_dbg_kms(connector->dev,
+		    "[CONNECTOR:%d:%s] generating connector hotplug event\n",
+		    connector->base.id, connector->name);
+
+	sbuf_printf(sb, "cdev=dri/%s connector=%u",
+	    dev_name(dev->primary->kdev), connector->base.id);
+	sbuf_finish(sb);
+	devctl_notify("DRM", "CONNECTOR", "HOTPLUG", sbuf_data(sb));
+	sbuf_delete(sb);
+}
+
+void drm_sysfs_connector_status_event(struct drm_connector *connector,
+				      struct drm_property *property)
+{
+	struct drm_device *dev = connector->dev;
+	struct sbuf *sb = sbuf_new_auto();
+
+	DRM_DEBUG("generating connector status event\n");
+
+	sbuf_printf(sb, "cdev=dri/%s connector=%u property=%u",
+	    dev_name(dev->primary->kdev), connector->base.id, property->base.id);
+	sbuf_finish(sb);
+	devctl_notify("DRM", "CONNECTOR", "HOTPLUG", sbuf_data(sb));
+	sbuf_delete(sb);
+}
+
 static void drm_sysfs_release(struct device *dev)
 {
 	kfree(dev);
@@ -101,6 +138,7 @@ int drm_sysfs_connector_add(struct drm_connector *connector)
 	connector->kdev->class = drm_class;
 	connector->kdev->parent = dev->primary->kdev;
 	connector->kdev->release = device_create_release;
+	connector->kdev->type = &drm_sysfs_device_connector;
 	device_initialize(connector->kdev);
 	dev_set_drvdata(connector->kdev, connector);
 	rv = kobject_set_name(&connector->kdev->kobj, "card%d-%s",

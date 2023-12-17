@@ -236,6 +236,7 @@ static enum dcn_bw_defs tl_pixel_format_to_bw_defs(enum surface_pixel_format for
 	case SURFACE_PIXEL_FORMAT_GRPH_ABGR2101010_XR_BIAS:
 		return dcn_bw_rgb_sub_32;
 	case SURFACE_PIXEL_FORMAT_GRPH_ARGB16161616:
+	case SURFACE_PIXEL_FORMAT_GRPH_ABGR16161616:
 	case SURFACE_PIXEL_FORMAT_GRPH_ARGB16161616F:
 	case SURFACE_PIXEL_FORMAT_GRPH_ABGR16161616F:
 		return dcn_bw_rgb_sub_64;
@@ -375,19 +376,18 @@ static void pipe_ctx_to_e2e_pipe_params (
 		input->src.viewport_height_c   = input->src.viewport_height / 2;
 		break;
 	case SURFACE_PIXEL_FORMAT_GRPH_ARGB16161616:
+	case SURFACE_PIXEL_FORMAT_GRPH_ABGR16161616:
 	case SURFACE_PIXEL_FORMAT_GRPH_ARGB16161616F:
 	case SURFACE_PIXEL_FORMAT_GRPH_ABGR16161616F:
 		input->src.source_format = dm_444_64;
 		input->src.viewport_width_c    = input->src.viewport_width;
 		input->src.viewport_height_c   = input->src.viewport_height;
 		break;
-#if defined(CONFIG_DRM_AMD_DC_DCN3_0)
 	case SURFACE_PIXEL_FORMAT_GRPH_RGBE_ALPHA:
 		input->src.source_format = dm_rgbe_alpha;
 		input->src.viewport_width_c    = input->src.viewport_width;
 		input->src.viewport_height_c   = input->src.viewport_height;
 		break;
-#endif
 	default:
 		input->src.source_format = dm_444_32;
 		input->src.viewport_width_c    = input->src.viewport_width;
@@ -459,9 +459,9 @@ static void dcn_bw_calc_rq_dlg_ttu(
 	struct _vcs_dpi_display_dlg_regs_st *dlg_regs = &pipe->dlg_regs;
 	struct _vcs_dpi_display_ttu_regs_st *ttu_regs = &pipe->ttu_regs;
 	struct _vcs_dpi_display_rq_regs_st *rq_regs = &pipe->rq_regs;
-	struct _vcs_dpi_display_rq_params_st rq_param = {0};
-	struct _vcs_dpi_display_dlg_sys_params_st dlg_sys_param = {0};
-	struct _vcs_dpi_display_e2e_pipe_params_st input = { { { 0 } } };
+	struct _vcs_dpi_display_rq_params_st *rq_param = &pipe->dml_rq_param;
+	struct _vcs_dpi_display_dlg_sys_params_st *dlg_sys_param = &pipe->dml_dlg_sys_param;
+	struct _vcs_dpi_display_e2e_pipe_params_st *input = &pipe->dml_input;
 	float total_active_bw = 0;
 	float total_prefetch_bw = 0;
 	int total_flip_bytes = 0;
@@ -470,45 +470,47 @@ static void dcn_bw_calc_rq_dlg_ttu(
 	memset(dlg_regs, 0, sizeof(*dlg_regs));
 	memset(ttu_regs, 0, sizeof(*ttu_regs));
 	memset(rq_regs, 0, sizeof(*rq_regs));
+	memset(rq_param, 0, sizeof(*rq_param));
+	memset(dlg_sys_param, 0, sizeof(*dlg_sys_param));
+	memset(input, 0, sizeof(*input));
 
 	for (i = 0; i < number_of_planes; i++) {
 		total_active_bw += v->read_bandwidth[i];
 		total_prefetch_bw += v->prefetch_bandwidth[i];
 		total_flip_bytes += v->total_immediate_flip_bytes[i];
 	}
-	dlg_sys_param.total_flip_bw = v->return_bw - dcn_bw_max2(total_active_bw, total_prefetch_bw);
-	if (dlg_sys_param.total_flip_bw < 0.0)
-		dlg_sys_param.total_flip_bw = 0;
+	dlg_sys_param->total_flip_bw = v->return_bw - dcn_bw_max2(total_active_bw, total_prefetch_bw);
+	if (dlg_sys_param->total_flip_bw < 0.0)
+		dlg_sys_param->total_flip_bw = 0;
 
-	dlg_sys_param.t_mclk_wm_us = v->dram_clock_change_watermark;
-	dlg_sys_param.t_sr_wm_us = v->stutter_enter_plus_exit_watermark;
-	dlg_sys_param.t_urg_wm_us = v->urgent_watermark;
-	dlg_sys_param.t_extra_us = v->urgent_extra_latency;
-	dlg_sys_param.deepsleep_dcfclk_mhz = v->dcf_clk_deep_sleep;
-	dlg_sys_param.total_flip_bytes = total_flip_bytes;
+	dlg_sys_param->t_mclk_wm_us = v->dram_clock_change_watermark;
+	dlg_sys_param->t_sr_wm_us = v->stutter_enter_plus_exit_watermark;
+	dlg_sys_param->t_urg_wm_us = v->urgent_watermark;
+	dlg_sys_param->t_extra_us = v->urgent_extra_latency;
+	dlg_sys_param->deepsleep_dcfclk_mhz = v->dcf_clk_deep_sleep;
+	dlg_sys_param->total_flip_bytes = total_flip_bytes;
 
-	pipe_ctx_to_e2e_pipe_params(pipe, &input.pipe);
-	input.clks_cfg.dcfclk_mhz = v->dcfclk;
-	input.clks_cfg.dispclk_mhz = v->dispclk;
-	input.clks_cfg.dppclk_mhz = v->dppclk;
-	input.clks_cfg.refclk_mhz = dc->res_pool->ref_clocks.dchub_ref_clock_inKhz / 1000.0;
-	input.clks_cfg.socclk_mhz = v->socclk;
-	input.clks_cfg.voltage = v->voltage_level;
+	pipe_ctx_to_e2e_pipe_params(pipe, &input->pipe);
+	input->clks_cfg.dcfclk_mhz = v->dcfclk;
+	input->clks_cfg.dispclk_mhz = v->dispclk;
+	input->clks_cfg.dppclk_mhz = v->dppclk;
+	input->clks_cfg.refclk_mhz = dc->res_pool->ref_clocks.dchub_ref_clock_inKhz / 1000.0;
+	input->clks_cfg.socclk_mhz = v->socclk;
+	input->clks_cfg.voltage = v->voltage_level;
 //	dc->dml.logger = pool->base.logger;
-	input.dout.output_format = (v->output_format[in_idx] == dcn_bw_420) ? dm_420 : dm_444;
-	input.dout.output_type  = (v->output[in_idx] == dcn_bw_hdmi) ? dm_hdmi : dm_dp;
+	input->dout.output_format = (v->output_format[in_idx] == dcn_bw_420) ? dm_420 : dm_444;
+	input->dout.output_type  = (v->output[in_idx] == dcn_bw_hdmi) ? dm_hdmi : dm_dp;
 	//input[in_idx].dout.output_standard;
 
 	/*todo: soc->sr_enter_plus_exit_time??*/
-	dlg_sys_param.t_srx_delay_us = dc->dcn_ip->dcfclk_cstate_latency / v->dcf_clk_deep_sleep;
 
-	dml1_rq_dlg_get_rq_params(dml, &rq_param, input.pipe.src);
+	dml1_rq_dlg_get_rq_params(dml, rq_param, &input->pipe.src);
 	dml1_extract_rq_regs(dml, rq_regs, rq_param);
 	dml1_rq_dlg_get_dlg_params(
 			dml,
 			dlg_regs,
 			ttu_regs,
-			rq_param.dlg,
+			&rq_param->dlg,
 			dlg_sys_param,
 			input,
 			true,
@@ -736,10 +738,13 @@ static void hack_bounding_box(struct dcn_bw_internal_vars *v,
 		hack_force_pipe_split(v, context->streams[0]->timing.pix_clk_100hz);
 }
 
-unsigned int get_highest_allowed_voltage_level(uint32_t hw_internal_rev, uint32_t pci_revision_id)
+static unsigned int get_highest_allowed_voltage_level(uint32_t chip_family,
+						      uint32_t hw_internal_rev,
+						      uint32_t pci_revision_id)
 {
 	/* for low power RV2 variants, the highest voltage level we want is 0 */
-	if (ASICREV_IS_RAVEN2(hw_internal_rev))
+	if ((chip_family == FAMILY_RV) &&
+	     ASICREV_IS_RAVEN2(hw_internal_rev))
 		switch (pci_revision_id) {
 		case PRID_DALI_DE:
 		case PRID_DALI_DF:
@@ -759,7 +764,7 @@ unsigned int get_highest_allowed_voltage_level(uint32_t hw_internal_rev, uint32_
 	return 4;
 }
 
-bool dcn_validate_bandwidth(
+bool dcn10_validate_bandwidth(
 		struct dc *dc,
 		struct dc_state *context,
 		bool fast_validate)
@@ -1325,6 +1330,7 @@ bool dcn_validate_bandwidth(
 	BW_VAL_TRACE_FINISH();
 
 	if (bw_limit_pass && v->voltage_level <= get_highest_allowed_voltage_level(
+							dc->ctx->asic_id.chip_family,
 							dc->ctx->asic_id.hw_internal_rev,
 							dc->ctx->asic_id.pci_revision_id))
 		return true;
@@ -1335,6 +1341,7 @@ bool dcn_validate_bandwidth(
 	BW_VAL_TRACE_FINISH();
 
 	bool ret = bw_limit_pass && v->voltage_level <= get_highest_allowed_voltage_level(
+							dc->ctx->asic_id.chip_family,
 							dc->ctx->asic_id.hw_internal_rev,
 							dc->ctx->asic_id.pci_revision_id);
 	DC_FP_END();

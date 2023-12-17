@@ -2,9 +2,16 @@
 
 SRCDIR=	${.CURDIR:H}/drivers/gpu/drm/i915
 
-.PATH:	${SRCDIR} ${SRCDIR}/gt ${SRCDIR}/gt/uc ${SRCDIR}/gem ${SRCDIR}/display ${SRCDIR}/oa
+.PATH:	${SRCDIR} \
+	${SRCDIR}/display \
+	${SRCDIR}/gem \
+	${SRCDIR}/gt \
+	${SRCDIR}/gt/uc \
+	${SRCDIR}/oa \
+	${SRCDIR}/pxp
 
 .include "../kconfig.mk"
+.include "../linuxkpi_version.mk"
 
 KMOD=	i915kms
 SRCS=	\
@@ -12,17 +19,18 @@ SRCS=	\
 	i915_buddy.c \
 	i915_cmd_parser.c \
 	i915_config.c \
-	i915_drv.c \
+	i915_deps.c \
+	i915_driver.c \
 	i915_getparam.c \
 	i915_gem.c \
-	i915_gem_client_blt.c \
 	i915_gem_evict.c \
 	i915_gem_gtt.c \
-	i915_gem_object_blt.c \
-	i915_globals.c \
+	i915_gem_ww.c \
 	i915_irq.c \
 	i915_memcpy.c \
+	i915_mitigations.c \
 	i915_mm.c \
+	i915_module.c \
 	i915_params.c \
 	i915_pci.c \
 	i915_query.c \
@@ -37,7 +45,10 @@ SRCS=	\
 	i915_sysfs.c \
 	i915_user_extensions.c \
 	i915_vgpu.c \
+	i915_ttm_buddy_manager.c \
 	i915_vma.c \
+	i915_vma_snapshot.c \
+	intel_acpi.c \
 	intel_atomic.c \
 	intel_atomic_plane.c \
 	intel_audio.c \
@@ -47,14 +58,18 @@ SRCS=	\
 	intel_color.c \
 	intel_combo_phy.c \
 	intel_connector.c \
-	intel_csr.c \
+	intel_crtc.c \
+	intel_cursor.c \
 	intel_device_info.c \
 	intel_display.c \
 	intel_display_power.c \
+	intel_dmc.c \
 	intel_dpio_phy.c \
+	intel_dpll.c \
 	intel_dpll_mgr.c \
 	intel_dram.c \
 	intel_fbc.c \
+	intel_fdi.c \
 	intel_fifo_underrun.c \
 	intel_freebsd.c \
 	intel_frontbuffer.c \
@@ -64,17 +79,21 @@ SRCS=	\
 	intel_opregion.c \
 	intel_overlay.c \
 	intel_pch.c \
+	intel_pcode.c \
 	intel_pm.c \
 	intel_psr.c \
 	intel_quirks.c \
-	intel_region_lmem.c \
+	intel_region_ttm.c \
 	intel_runtime_pm.c \
-	intel_sideband.c \
+	intel_sbi.c \
+	intel_snps_phy.c \
+	intel_step.c \
 	intel_sprite.c \
 	intel_uncore.c \
 	i915_utils.c \
 	intel_wakeref.c \
 	intel_wopcm.c \
+	vlv_sideband.c \
 	vlv_suspend.c
 
 # display/*
@@ -84,18 +103,27 @@ SRCS+=	dvo_ch7017.c \
 	dvo_ns2501.c \
 	dvo_sil164.c \
 	dvo_tfp410.c \
+	g4x_dp.c \
+	g4x_hdmi.c \
 	icl_dsi.c \
+	intel_backlight.c \
 	intel_crt.c \
 	intel_ddi.c \
+	intel_ddi_buf_trans.c \
 	intel_dp.c \
+	intel_dp_aux.c \
 	intel_dp_aux_backlight.c \
 	intel_dp_hdcp.c \
 	intel_dp_link_training.c \
 	intel_dp_mst.c \
+	intel_dpt.c \
+	intel_drrs.c \
 	intel_dsi.c \
 	intel_dsi_dcs_backlight.c \
 	intel_dsi_vbt.c \
 	intel_dsb.c \
+	intel_fb.c \
+	intel_fb_pin.c \
 	intel_dvo.c \
 	intel_global_state.c \
 	intel_gmbus.c \
@@ -103,11 +131,20 @@ SRCS+=	dvo_ch7017.c \
 	intel_lspcon.c \
 	intel_lvds.c \
 	intel_panel.c \
+	intel_pch_display.c \
+	intel_pch_refclk.c \
+	intel_plane_initial.c \
+	intel_pps.c \
+	intel_qp_tables.c \
 	intel_sdvo.c \
 	intel_tc.c \
 	intel_tv.c \
 	intel_vdsc.c \
+	intel_vrr.c \
 	intel_vga.c \
+	i9xx_plane.c \
+	skl_scaler.c \
+	skl_universal_plane.c \
 	vlv_dsi.c \
 	vlv_dsi_pll.c
 
@@ -118,17 +155,18 @@ SRCS+=	gen2_engine_cs.c \
 	gen6_renderstate.c \
 	gen7_renderclear.c \
 	gen7_renderstate.c \
+	gen8_engine_cs.c \
 	gen8_ppgtt.c \
 	gen8_renderstate.c \
 	gen9_renderstate.c \
 	intel_breadcrumbs.c \
 	intel_context.c \
-	intel_context_param.c \
 	intel_context_sseu.c \
 	intel_engine_cs.c \
 	intel_engine_heartbeat.c \
 	intel_engine_pm.c \
 	intel_engine_user.c \
+	intel_execlists_submission.c \
 	intel_ggtt.c \
 	intel_ggtt_fencing.c \
 	intel_gt.c \
@@ -139,11 +177,15 @@ SRCS+=	gen2_engine_cs.c \
 	intel_gt_pm_irq.c \
 	intel_gt_requests.c \
 	intel_gtt.c \
+	intel_guc_rc.c \
+	intel_guc_slpc.c \
 	intel_llc.c \
 	intel_lrc.c \
+	intel_migrate.c \
 	intel_mocs.c \
 	intel_ppgtt.c \
 	intel_rc6.c \
+	intel_region_lmem.c \
 	intel_renderstate.c \
 	intel_reset.c \
 	intel_ring.c \
@@ -171,10 +213,10 @@ SRCS+=	intel_guc.c \
 SRCS+=	i915_gem_busy.c \
 	i915_gem_clflush.c \
 	i915_gem_context.c \
+	i915_gem_create.c \
 	i915_gem_domain.c \
 	i915_gem_dmabuf.c \
 	i915_gem_execbuffer.c \
-	i915_gem_fence.c \
 	i915_gem_internal.c \
 	i915_gem_lmem.c \
 	i915_gem_mman.c \
@@ -188,24 +230,40 @@ SRCS+=	i915_gem_busy.c \
 	i915_gem_stolen.c \
 	i915_gem_throttle.c \
 	i915_gem_tiling.c \
+	i915_gem_ttm.c \
+	i915_gem_ttm_move.c \
+	i915_gem_ttm_pm.c \
 	i915_gem_userptr.c \
 	i915_gem_wait.c
+
+# pxp/*
+.if !empty(KCONFIG:MDRM_I915_PXP)
+SRCS+=	intel_pxp.c \
+	intel_pxp_cmd.c \
+	intel_pxp_debugfs.c \
+	intel_pxp_irq.c \
+	intel_pxp_pm.c \
+	intel_pxp_session.c \
+	intel_pxp_tee.c
+.endif
 
 .if !empty(KCONFIG:MCOMPAT)
 SRCS+=	i915_ioc32.c
 .endif
 
-.if !empty(KCONFIG:MDEBUGFS)
+.if !empty(KCONFIG:MDEBUG_FS)
 SRCS+=	i915_debugfs.c \
-	i915_gemfs.c \
-	intel_pipe_crc.c \
-	debugfs_engines.c \
-	debugfs_gt.c \
-	debugfs_gt_pm.c \
+	i915_debugfs_params.c \
+	intel_display_debugfs.c \
+	intel_gt_debugfs.c \
+	intel_gt_engines_debugfs.c \
+	intel_gt_pm_debugfs.c \
 	intel_guc_debugfs.c \
 	intel_guc_log_debugfs.c \
-	intel_uc_debugfs.c \
-	intel_sseu_debugfs.c
+	intel_huc_debugfs.c \
+	intel_pipe_crc.c \
+	intel_sseu_debugfs.c \
+	intel_uc_debugfs.c
 .endif
 
 .if !empty(KCONFIG:MDRM_FBDEV_EMULATION)
@@ -225,6 +283,7 @@ CFLAGS+= -I${.CURDIR:H}/linuxkpi/gplv2/include
 CFLAGS+= -I${.CURDIR:H}/linuxkpi/bsd/include
 CFLAGS+= -I${SYSDIR}/compat/linuxkpi/common/include
 CFLAGS+= -I${.CURDIR:H}/linuxkpi/dummy/include
+CFLAGS+= -I${SYSDIR}/compat/linuxkpi/dummy/include
 
 CFLAGS+= -I${.CURDIR:H}/include
 CFLAGS+= -I${.CURDIR:H}/include/drm
@@ -232,12 +291,11 @@ CFLAGS+= -I${.CURDIR:H}/include/uapi
 CFLAGS+= -I${SRCDIR:H:H} -I${SRCDIR} -I${SRCDIR}/display
 
 CFLAGS+= '-DKBUILD_MODNAME="${KMOD}"'
-CFLAGS+= '-DLINUXKPI_PARAM_PREFIX=i915_' -DDRM_SYSCTL_PARAM_PREFIX=_${KMOD} -DLINUXKPI_VERSION=50000
+CFLAGS+= '-DLINUXKPI_PARAM_PREFIX=i915_' -DDRM_SYSCTL_PARAM_PREFIX=_${KMOD}
 CFLAGS+= ${KCONFIG:C/(.*)/-DCONFIG_\1/}
 
 SRCS	+=			\
 	opt_acpi.h		\
-	opt_compat.h		\
 	opt_drm.h		\
 	opt_syscons.h		\
 	acpi_if.h		\
@@ -258,23 +316,35 @@ CWARNFLAGS += -Wno-pointer-arith -Wno-format -Wno-cast-qual
 CWARNFLAGS.intel_acpi.c=	-Wno-incompatible-pointer-types
 CWARNFLAGS.intel_audio.c=	-Wno-unused-function
 CWARNFLAGS.intel_combo_phy.c=	-Wno-uninitialized
-CWARNFLAGS.intel_dp.c=		-Wno-unused-variable -Wno-sometimes-uninitialized
+CWARNFLAGS.intel_ddi.c=		-Wno-unused-but-set-variable -Wno-missing-prototypes
+CWARNFLAGS.intel_dp.c=		-Wno-unused-variable -Wno-sometimes-uninitialized -Wno-constant-logical-operand
+CWARNFLAGS.intel_dp_aux_backlight.c=	-Wno-shift-count-overflow
 CWARNFLAGS.intel_dpll_mgr.c=	-Wno-compare-distinct-pointer-types
 CWARNFLAGS.intel_display.c=	-Wno-unused-but-set-variable
+CWARNFLAGS.intel_dpll.c=	-Wno-unused-but-set-variable
+CWARNFLAGS.intel_fb.c=		-Wno-unused-but-set-variable
+CWARNFLAGS.intel_fbc.c=		-Wno-unused-variable
 CWARNFLAGS.intel_fbdev.c=	-Wno-initializer-overrides
 CWARNFLAGS.intel_freebsd.c=	-Wno-unused-function
+CWARNFLAGS.i915_gem_context.c=	-Wno-unused-function
 CWARNFLAGS.intel_hdmi.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.intel_hotplug.c=	-Wno-uninitialized
 CWARNFLAGS.intel_pm.c=		-Wno-incompatible-pointer-types-discards-qualifiers
 CWARNFLAGS.intel_psr.c=		-Wno-unused-but-set-variable
+CWARNFLAGS.intel_region_ttm.c=	-Wno-missing-prototypes
 CWARNFLAGS.intel_reset.c=	-Wno-unused-but-set-variable
-CWARNFLAGS.i915_drv.c=		-Wno-unused-but-set-variable
+CWARNFLAGS.i915_debugfs.c=	-Wno-unused-but-set-variable
+CWARNFLAGS.i915_driver.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.i915_irq.c=		-Wno-unused-but-set-variable
 CWARNFLAGS.i915_gem_execbuffer.c=	-Wno-unused-but-set-variable -Wno-sometimes-uninitialized
 CWARNFLAGS.i915_gem_mman.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.i915_gem_shmem.c=	-Wno-unused-but-set-variable
+CWARNFLAGS.i915_gem_ttm_move.c=	-Wno-unused-variable
 CWARNFLAGS.i915_pci.c=		-Wno-initializer-overrides
 CWARNFLAGS.i915_active.c=	-Wno-unused-function
 CWARNFLAGS.i915_sw_fence.c=	-Wno-unused-function
 CWARNFLAGS.i915_vma.c=		-Wno-unused-function -Wno-unused-but-set-variable
+CWARNFLAGS.i9xx_plane.c=	-Wno-unused-but-set-variable
+CWARNFLAGS.g4x_dp.c=		-Wno-shift-count-overflow
+CWARNFLAGS.skl_universal_plane.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.vlv_dsi.c=		-Wno-unused-but-set-variable

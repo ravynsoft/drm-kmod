@@ -32,10 +32,9 @@
 
 #define pr_fmt(fmt) "[TTM] " fmt
 
-#include <drm/ttm/ttm_module.h>
-#include <drm/ttm/ttm_bo_driver.h>
-#include <drm/ttm/ttm_page_alloc.h>
-#include <drm/ttm/ttm_placement.h>
+#include <drm/ttm/ttm_device.h>
+#include <drm/ttm/ttm_tt.h>
+#include <drm/ttm/ttm_resource.h>
 #include <linux/agp_backend.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -61,12 +60,11 @@ struct ttm_agp_backend {
 int ttm_agp_bind(struct ttm_tt *ttm, struct ttm_resource *bo_mem)
 {
 	struct ttm_agp_backend *agp_be = container_of(ttm, struct ttm_agp_backend, ttm);
-	struct page *dummy_read_page = ttm_bo_glob.dummy_read_page;
-	struct drm_mm_node *node = bo_mem->mm_node;
+	struct page *dummy_read_page = ttm_glob.dummy_read_page;
 	unsigned i;
 #ifdef __linux__
 	struct agp_memory *mem;
-	int ret, cached = (bo_mem->placement & TTM_PL_FLAG_CACHED);
+	int ret, cached = ttm->caching == ttm_cached;
 
 	if (agp_be->mem)
 		return 0;
@@ -89,7 +87,7 @@ int ttm_agp_bind(struct ttm_tt *ttm, struct ttm_resource *bo_mem)
 	mem->is_flushed = 1;
 	mem->type = (cached) ? AGP_USER_CACHED_MEMORY : AGP_USER_MEMORY;
 
-	ret = agp_bind_memory(mem, node->start);
+	ret = agp_bind_memory(mem, bo_mem->start);
 #elif defined(__FreeBSD__)
 	int ret;
 	for (i = 0; i < ttm->num_pages; i++) {
@@ -101,7 +99,7 @@ int ttm_agp_bind(struct ttm_tt *ttm, struct ttm_resource *bo_mem)
 		agp_be->pages[i] = page;
 	}
 
-	agp_be->offset = node->start * PAGE_SIZE;
+	agp_be->offset = bo_mem->start * PAGE_SIZE;
 	ret = -agp_bind_pages(agp_be->bridge, agp_be->pages,
 	    ttm->num_pages << PAGE_SHIFT, agp_be->offset);
 #endif
@@ -182,7 +180,7 @@ struct ttm_tt *ttm_agp_tt_create(struct ttm_buffer_object *bo,
 #endif
 	agp_be->bridge = bridge;
 
-	if (ttm_tt_init(&agp_be->ttm, bo, page_flags)) {
+	if (ttm_tt_init(&agp_be->ttm, bo, page_flags, ttm_write_combined)) {
 		kfree(agp_be);
 		return NULL;
 	}

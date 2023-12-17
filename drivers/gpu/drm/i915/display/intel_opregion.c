@@ -30,10 +30,9 @@
 #include <linux/firmware.h>
 #include <acpi/video.h>
 
-#include "display/intel_panel.h"
-
 #include "i915_drv.h"
 #include "intel_acpi.h"
+#include "intel_backlight.h"
 #include "intel_display_types.h"
 #include "intel_opregion.h"
 
@@ -247,7 +246,7 @@ static int swsci(struct drm_i915_private *dev_priv,
 		 u32 function, u32 parm, u32 *parm_out)
 {
 	struct opregion_swsci *swsci = dev_priv->opregion.swsci;
-	struct pci_dev *pdev = dev_priv->drm.pdev;
+	struct pci_dev *pdev = to_pci_dev(dev_priv->drm.dev);
 	u32 main_function, sub_function, scic;
 	u16 swsci_val;
 	u32 dslp;
@@ -361,6 +360,21 @@ int intel_opregion_notify_encoder(struct intel_encoder *intel_encoder,
 		port++;
 	}
 
+	/*
+	 * The port numbering and mapping here is bizarre. The now-obsolete
+	 * swsci spec supports ports numbered [0..4]. Port E is handled as a
+	 * special case, but port F and beyond are not. The functionality is
+	 * supposed to be obsolete for new platforms. Just bail out if the port
+	 * number is out of bounds after mapping.
+	 */
+	if (port > 4) {
+		drm_dbg_kms(&dev_priv->drm,
+			    "[ENCODER:%d:%s] port %c (index %u) out of bounds for display power state notification\n",
+			    intel_encoder->base.base.id, intel_encoder->base.name,
+			    port_name(intel_encoder->port), port);
+		return -EINVAL;
+	}
+
 	if (!enable)
 		parm |= 4 << 8;
 
@@ -433,6 +447,11 @@ static u32 asle_set_backlight(struct drm_i915_private *dev_priv, u32 bclp)
 			    "opregion backlight request ignored\n");
 		return 0;
 	}
+#elif defined(__FreeBSD__)
+	/*
+	 * Assume "native" backlight
+	 */
+	return 0;
 #endif
 
 	if (!(bclp & ASLE_BCLP_VALID))
@@ -452,7 +471,7 @@ static u32 asle_set_backlight(struct drm_i915_private *dev_priv, u32 bclp)
 		    bclp);
 	drm_connector_list_iter_begin(dev, &conn_iter);
 	for_each_intel_connector_iter(connector, &conn_iter)
-		intel_panel_set_backlight_acpi(connector->base.state, bclp, 255);
+		intel_backlight_set_acpi(connector->base.state, bclp, 255);
 	drm_connector_list_iter_end(&conn_iter);
 	asle->cblv = DIV_ROUND_UP(bclp * 100, 255) | ASLE_CBLV_VALID;
 
@@ -811,7 +830,7 @@ static int intel_load_vbt_firmware(struct drm_i915_private *dev_priv)
 	if (!name || !*name)
 		return -ENOENT;
 
-	ret = request_firmware(&fw, name, &dev_priv->drm.pdev->dev);
+	ret = request_firmware(&fw, name, dev_priv->drm.dev);
 	if (ret) {
 		drm_err(&dev_priv->drm,
 			"Requesting VBT firmware \"%s\" failed (%d)\n",
@@ -844,7 +863,7 @@ static int intel_load_vbt_firmware(struct drm_i915_private *dev_priv)
 int intel_opregion_setup(struct drm_i915_private *dev_priv)
 {
 	struct intel_opregion *opregion = &dev_priv->opregion;
-	struct pci_dev *pdev = dev_priv->drm.pdev;
+	struct pci_dev *pdev = to_pci_dev(dev_priv->drm.dev);
 	u32 asls, mboxes;
 	char buf[sizeof(OPREGION_SIGNATURE)];
 	int err = 0;
@@ -1011,12 +1030,8 @@ intel_opregion_get_panel_type(struct drm_i915_private *dev_priv)
 	int ret;
 
 	ret = swsci(dev_priv, SWSCI_GBDA_PANEL_DETAILS, 0x0, &panel_details);
-	if (ret) {
-		drm_dbg_kms(&dev_priv->drm,
-			    "Failed to get panel details from OpRegion (%d)\n",
-			    ret);
+	if (ret)
 		return ret;
-	}
 
 	ret = (panel_details >> 8) & 0xff;
 	if (ret > 0x10) {
@@ -1085,6 +1100,9 @@ void intel_opregion_resume(struct drm_i915_private *i915)
 		opregion->asle->tche = ASLE_TCHE_BLC_EN;
 		opregion->asle->ardy = ASLE_ARDY_READY;
 	}
+
+	/* Some platforms abuse the _DSM to enable MUX */
+	intel_dsm_get_bios_data_funcs_supported(i915);
 
 	intel_opregion_notify_adapter(i915, PCI_D0);
 }

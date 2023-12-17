@@ -21,7 +21,9 @@
  *
  */
 #include <asm/div64.h>
+#ifdef __FreeBSD__
 #undef MAX
+#endif
 
 #define SHIFT_AMOUNT 16 /* We multiply all original integers with 2^SHIFT_AMOUNT to get the fInt representation */
 
@@ -334,13 +336,13 @@ static fInt fMultiply (fInt X, fInt Y) /* Uses 64-bit integers (int64_t) */
 {
 	fInt Product;
 	int64_t tempProduct;
+
+	/*The following is for a very specific common case: Non-zero number with ONLY fractional portion*/
+	/* TEMPORARILY DISABLED - CAN BE USED TO IMPROVE PRECISION
 	bool X_LessThanOne, Y_LessThanOne;
 
 	X_LessThanOne = (X.partial.real == 0 && X.partial.decimal != 0 && X.full >= 0);
 	Y_LessThanOne = (Y.partial.real == 0 && Y.partial.decimal != 0 && Y.full >= 0);
-
-	/*The following is for a very specific common case: Non-zero number with ONLY fractional portion*/
-	/* TEMPORARILY DISABLED - CAN BE USED TO IMPROVE PRECISION
 
 	if (X_LessThanOne && Y_LessThanOne) {
 		Product.full = X.full * Y.full;

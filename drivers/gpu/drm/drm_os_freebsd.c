@@ -18,6 +18,8 @@ __FBSDID("$FreeBSD$");
 #include <dev/iicbus/iicbus.h>
 #include <dev/iicbus/iiconf.h>
 
+#include <vm/vm_phys.h>
+
 #include <linux/cdev.h>
 #include <linux/fb.h>
 #undef fb_info
@@ -25,15 +27,13 @@ __FBSDID("$FreeBSD$");
 
 devclass_t drm_devclass;
 
-MALLOC_DEFINE(DRM_MEM_DMA, "drm_dma", "DRM DMA Data Structures");
 MALLOC_DEFINE(DRM_MEM_DRIVER, "drm_driver", "DRM DRIVER Data Structures");
-MALLOC_DEFINE(DRM_MEM_KMS, "drm_kms", "DRM KMS Data Structures");
 
 SYSCTL_NODE(_dev, OID_AUTO, drm, CTLFLAG_RW, 0, "DRM args (compat)");
 SYSCTL_INT(_dev_drm, OID_AUTO, __drm_debug, CTLFLAG_RWTUN, &__drm_debug, 0, "drm debug flags (compat)");
 SYSCTL_NODE(_hw, OID_AUTO, dri, CTLFLAG_RW, 0, "DRI args");
 SYSCTL_INT(_hw_dri, OID_AUTO, __drm_debug, CTLFLAG_RWTUN, &__drm_debug, 0, "drm debug flags");
-static int skip_ddb;
+int skip_ddb;
 SYSCTL_INT(_dev_drm, OID_AUTO, skip_ddb, CTLFLAG_RWTUN, &skip_ddb, 0, "go straight to dumping core (compat)");
 SYSCTL_INT(_hw_dri, OID_AUTO, skip_ddb, CTLFLAG_RWTUN, &skip_ddb, 0, "go straight to dumping core");
 #if defined(DRM_DEBUG_LOG_ALL)
@@ -79,59 +79,41 @@ sysctl_pci_id(SYSCTL_HANDLER_ARGS)
 	return (sysctl_handle_string(oidp, buf, sizeof(buf), req));
 }
 
-/* Framebuffer related code */
-
-/* Call restore out of vt(9) locks. */
-void
-vt_restore_fbdev_mode(void *arg, int pending)
-{
-	struct drm_fb_helper *fb_helper;
-	struct vt_kms_softc *sc;
-	struct mm_struct mm;
-
-	sc = (struct vt_kms_softc *)arg;
-	fb_helper = sc->fb_helper;
-	linux_set_current(curthread);
-	if(!fb_helper) {
-		DRM_DEBUG("fb helper is null!\n");
-		return;
-	}
-	drm_fb_helper_restore_fbdev_mode_unlocked(fb_helper);
-}
-
 int
-vt_kms_postswitch(void *arg)
+register_fictitious_range(vm_paddr_t base, size_t size)
 {
-	struct vt_kms_softc *sc;
+	int ret;
+	struct apertures_struct *ap;
 
-	sc = (struct vt_kms_softc *)arg;
+	MPASS(base != 0);
+	MPASS(size != 0);
 
-	if (!kdb_active && panicstr == NULL) {
-		taskqueue_enqueue(taskqueue_thread, &sc->fb_mode_task);
+	ap = alloc_apertures(1);
+	ap->ranges[0].base = base;
+	ap->ranges[0].size = size;
+	vt_freeze_main_vd(ap);
+	kfree(ap);
 
-		/* XXX the VT_ACTIVATE IOCTL must be synchronous */
-		if (curthread->td_proc->p_pid != 0 &&
-		    taskqueue_member(taskqueue_thread, curthread) == 0)
-			taskqueue_drain(taskqueue_thread, &sc->fb_mode_task);
-	} else {
-#ifdef DDB
-		db_trace_self_depth(10);
-		mdelay(1000);
+	ret = vm_phys_fictitious_reg_range(base, base + size,
+#ifdef VM_MEMATTR_WRITE_COMBINING
+					   VM_MEMATTR_WRITE_COMBINING
+#else
+					   VM_MEMATTR_UNCACHEABLE
 #endif
-		if (skip_ddb) {
-			spinlock_enter();
-			doadump(0);
-			EVENTHANDLER_INVOKE(shutdown_final, RB_NOSYNC);
-		}
-		linux_set_current(curthread);
-		if(!sc->fb_helper) {
-			DRM_DEBUG("fb helper is null!\n");
-			return -1;
-		}
-		drm_fb_helper_restore_fbdev_mode_unlocked(sc->fb_helper);
-	}
-	return (0);
+	    );
+	MPASS(ret == 0);
+
+	return (ret);
 }
+
+void
+unregister_fictitious_range(vm_paddr_t base, size_t size)
+{
+	vm_phys_fictitious_unreg_range(base, base + size);
+	vt_unfreeze_main_vd();
+}
+
+/* Framebuffer related code */
 
 int
 drm_dev_alias(struct device *ldev, struct drm_minor *minor, const char *minor_str)
@@ -207,8 +189,10 @@ MODULE_DEPEND(drmn, iicbb, IICBB_MINVER, IICBB_PREFVER, IICBB_MAXVER);
 MODULE_DEPEND(drmn, pci, 1, 1, 1);
 MODULE_DEPEND(drmn, mem, 1, 1, 1);
 MODULE_DEPEND(drmn, linuxkpi, 1, 1, 1);
-MODULE_DEPEND(drmn, linuxkpi_gplv2, 1, 1, 1);
+#if __FreeBSD_version >= 1400085
+MODULE_DEPEND(drmn, linuxkpi_hdmi, 1, 1, 1);
+#endif
 MODULE_DEPEND(drmn, dmabuf, 1, 1, 1);
 #ifdef CONFIG_DEBUG_FS
-MODULE_DEPEND(drmn, debugfs, 1, 1, 1);
+MODULE_DEPEND(drmn, lindebugfs, 1, 1, 1);
 #endif

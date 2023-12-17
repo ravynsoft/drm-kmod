@@ -20,11 +20,6 @@ __FBSDID("$FreeBSD$");
 #define DRM_DEV_UID	UID_ROOT
 #define DRM_DEV_GID	GID_VIDEO
 
-struct vt_kms_softc {
-	struct drm_fb_helper    *fb_helper;
-	struct task              fb_mode_task;
-};
-
 /* XXXKIB what is the right code for the FreeBSD ? */
 /* kib@ used ENXIO here -- dumbbell@ */
 #define	EREMOTEIO	EIO
@@ -32,18 +27,20 @@ struct vt_kms_softc {
 #define	KTR_DRM		KTR_DEV
 #define	KTR_DRM_REG	KTR_SPARE3
 
-MALLOC_DECLARE(DRM_MEM_DMA);
 MALLOC_DECLARE(DRM_MEM_DRIVER);
-MALLOC_DECLARE(DRM_MEM_KMS);
 
 extern devclass_t drm_devclass;
+extern int skip_ddb;
 
 struct drm_minor;
 int drm_dev_alias(struct device *dev, struct drm_minor *minor, const char *minor_str);
 void cancel_reset_debug_log(void);
 
-void vt_restore_fbdev_mode(void *arg, int pending);
-int vt_kms_postswitch(void *arg);
+void vt_freeze_main_vd(struct apertures_struct *a);
+void vt_unfreeze_main_vd(void);
+
+int register_fictitious_range(vm_paddr_t start, vm_paddr_t end);
+void unregister_fictitious_range(vm_paddr_t start, vm_paddr_t end);
 
 #if 0
 struct linux_fb_info;

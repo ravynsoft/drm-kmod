@@ -30,6 +30,7 @@
 #include <linux/sched.h>
 #include <linux/types.h>
 #include <linux/workqueue.h>
+#include <linux/sched/clock.h>
 
 struct drm_i915_private;
 struct timer_list;
@@ -200,6 +201,11 @@ __check_struct_size(size_t base, size_t arr, size_t count, size_t *size)
 	*(ptr) = (typeof(*ptr))0;					\
 	__T;								\
 })
+
+static __always_inline ptrdiff_t ptrdiff(const void *a, const void *b)
+{
+	return a - b;
+}
 
 /*
  * container_of_user: Extract the superclass from a pointer to a member.
@@ -418,6 +424,11 @@ static inline const char *onoff(bool v)
 	return v ? "on" : "off";
 }
 
+static inline const char *enabledisable(bool v)
+{
+	return v ? "enable" : "disable";
+}
+
 static inline const char *enableddisabled(bool v)
 {
 	return v ? "enabled" : "disabled";
@@ -438,22 +449,14 @@ static inline void __add_taint_for_CI(unsigned int taint)
 void cancel_timer(struct timer_list *t);
 void set_timer_ms(struct timer_list *t, unsigned long timeout);
 
-static inline bool timer_expired(const struct timer_list *t)
+static inline bool timer_active(const struct timer_list *t)
 {
-	return READ_ONCE(t->expires) && !timer_pending(t);
+	return READ_ONCE(t->expires);
 }
 
-/*
- * This is a lookalike for IS_ENABLED() that takes a kconfig value,
- * e.g. CONFIG_DRM_I915_SPIN_REQUEST, and evaluates whether it is non-zero
- * i.e. whether the configuration is active. Wrapping up the config inside
- * a boolean context prevents clang and smatch from complaining about potential
- * issues in confusing logical-&& with bitwise-& for constants.
- *
- * Sadly IS_ENABLED() itself does not work with kconfig values.
- *
- * Returns 0 if @config is 0, 1 if set to any value.
- */
-#define IS_ACTIVE(config) ((config) != 0)
+static inline bool timer_expired(const struct timer_list *t)
+{
+	return timer_active(t) && !timer_pending(t);
+}
 
 #endif /* !__I915_UTILS_H */

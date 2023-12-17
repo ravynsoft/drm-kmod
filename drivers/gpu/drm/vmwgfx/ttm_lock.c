@@ -32,7 +32,9 @@
 #include <linux/atomic.h>
 #include <linux/errno.h>
 #include <linux/wait.h>
+#ifdef __linux__
 #include <linux/sched/signal.h>
+#endif
 #include "ttm_lock.h"
 #include "ttm_object.h"
 
