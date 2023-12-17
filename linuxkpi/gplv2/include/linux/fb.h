@@ -4,7 +4,9 @@
 #include <uapi/linux/fb.h>
 
 #include <linux/fs.h>
+#ifdef __linux__
 #include <linux/init.h>
+#endif
 #include <linux/workqueue.h>
 #include <linux/list.h>
 #include <linux/pci.h>
