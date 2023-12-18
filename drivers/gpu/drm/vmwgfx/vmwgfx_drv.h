@@ -52,7 +52,6 @@
  */
 #include <drm/vmwgfx_drm.h>
 
-
 #define VMWGFX_DRIVER_NAME "vmwgfx"
 #define VMWGFX_DRIVER_DATE "20211206"
 #define VMWGFX_DRIVER_MAJOR 2
@@ -64,6 +63,10 @@
 
 #define VMWGFX_PCI_ID_SVGA2              0x0405
 #define VMWGFX_PCI_ID_SVGA3              0x0406
+
+#ifdef __FreeBSD__
+#define PCI_VENDOR_ID_VMWARE             0x15AD
+#endif
 
 /*
  * Perhaps we should have sysfs entries for these.
@@ -91,6 +94,10 @@
 
 #define MKSSTAT_CAPACITY_LOG2 5U
 #define MKSSTAT_CAPACITY (1U << MKSSTAT_CAPACITY_LOG2)
+
+#ifdef __FreeBSD__
+SYSCTL_DECL(_hw_radeonkms);
+#endif
 
 struct vmw_fpriv {
 	struct ttm_object_file *tfile;

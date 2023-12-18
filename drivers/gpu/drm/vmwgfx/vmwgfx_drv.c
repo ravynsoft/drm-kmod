@@ -40,6 +40,8 @@
 #include <drm/ttm/ttm_placement.h>
 #ifdef __linux__
 #include <generated/utsrelease.h>
+#elif defined(__FreeBSD__)
+#define UTS_RELEASE "123"
 #endif
 
 #include "ttm_object.h"
@@ -52,6 +54,42 @@
 
 #define VMW_MIN_INITIAL_WIDTH 800
 #define VMW_MIN_INITIAL_HEIGHT 600
+
+#ifdef __FreeBSD__
+#include <vm/vm_phys.h>
+
+#define DRIVER_DESC "VmWare VGA"
+
+SYSCTL_NODE(_hw, OID_AUTO, vmwgfx,
+    CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
+    DRIVER_DESC " parameters");
+
+/* Implement a couple of missing bits here for testing
+ * FIXME: these really belog in sys/compat/linuxkpi
+ */
+static void __releaser(struct device *d, void *p)
+{
+    memunmap(*(void **)p);
+}
+
+static void *__devm_memremap(struct device *d, uint64_t offset,
+    size_t size, unsigned long flags)
+{
+    void *addr = 0;
+    void **p = lkpi_devres_alloc(__releaser, sizeof(*p), dev_to_node(d));
+    if(!p)
+        return (void *)-ENOMEM;
+    addr = memremap(offset, size, flags);
+    if(!addr) {
+        lkpi_devres_free(p);
+        return (void *)-ENXIO;
+    }
+    *p = addr;
+    lkpi_devres_add(d, p);
+    return addr;
+}
+#endif
+
 
 /*
  * Fully encoded drm commands. Might move to vmw_drm.h
@@ -261,7 +299,9 @@ static const struct pci_device_id vmw_pci_id_list[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_VMWARE, VMWGFX_PCI_ID_SVGA3) },
 	{ }
 };
+#ifdef __linux__
 MODULE_DEVICE_TABLE(pci, vmw_pci_id_list);
+#endif
 
 static int enable_fbdev = IS_ENABLED(CONFIG_DRM_VMWGFX_FBCON);
 static int vmw_restrict_iommu;
@@ -738,7 +778,11 @@ static int vmw_setup_pci_resources(struct vmw_private *dev,
 		dev->vram_size = pci_resource_len(pdev, 2);
 
 		drm_info(&dev->drm,
+#ifdef __linux__
 			"Register MMIO at 0x%pa size is %llu kiB\n",
+#elif defined(__FreeBSD__)
+			"Register MMIO at 0x%pa size is %lu kiB\n",
+#endif
 			 &rmmio_start, (uint64_t)rmmio_size / 1024);
 		dev->rmmio = devm_ioremap(dev->drm.dev,
 					  rmmio_start,
@@ -757,9 +801,17 @@ static int vmw_setup_pci_resources(struct vmw_private *dev,
 		fifo_size = pci_resource_len(pdev, 2);
 
 		drm_info(&dev->drm,
+#ifdef __linux__
 			 "FIFO at %pa size is %llu kiB\n",
+#elif defined(__FreeBSD__)
+			 "FIFO at %pa size is %lu kiB\n",
+#endif
 			 &fifo_start, (uint64_t)fifo_size / 1024);
+#ifdef __FreeBSD__
+		dev->fifo_mem = __devm_memremap(dev->drm.dev,
+#elif defined(__linux__)
 		dev->fifo_mem = devm_memremap(dev->drm.dev,
+#endif
 					      fifo_start,
 					      fifo_size,
 					      MEMREMAP_WB);
@@ -782,7 +834,11 @@ static int vmw_setup_pci_resources(struct vmw_private *dev,
 	 * SVGA_REG_VRAM_SIZE.
 	 */
 	drm_info(&dev->drm,
+#ifdef __linux__
 		 "VRAM at %pa size is %llu kiB\n",
+#elif defined(__FreeBSD__)
+		 "VRAM at %pa size is %lu kiB\n",
+#endif
 		 &dev->vram_start, (uint64_t)dev->vram_size / 1024);
 
 	return 0;
@@ -935,7 +991,11 @@ static int vmw_driver_load(struct vmw_private *dev_priv, u32 pci_id)
 		dev_priv->max_primary_mem = dev_priv->vram_size;
 	}
 	drm_info(&dev_priv->drm,
+#ifdef __linux__
 		 "Legacy memory limits: VRAM = %llu kB, FIFO = %llu kB, surface = %u kB\n",
+#elif defined(__FreeBSD__)
+		 "Legacy memory limits: VRAM = %lu kB, FIFO = %lu kB, surface = %u kB\n",
+#endif
 		 (u64)dev_priv->vram_size / 1024,
 		 (u64)dev_priv->fifo_mem_size / 1024,
 		 dev_priv->memory_size / 1024);
@@ -967,7 +1027,11 @@ static int vmw_driver_load(struct vmw_private *dev_priv, u32 pci_id)
 			 (unsigned)dev_priv->max_gmr_pages);
 	}
 	drm_info(&dev_priv->drm,
+#ifdef __linux__
 		 "Maximum display memory size is %llu kiB\n",
+#elif defined(__FreeBSD__)
+		 "Maximum display memory size is %lu kiB\n",
+#endif
 		 (uint64_t)dev_priv->max_primary_mem / 1024);
 
 	/* Need mmio memory to check for fifo pitchlock cap. */
@@ -1008,7 +1072,11 @@ static int vmw_driver_load(struct vmw_private *dev_priv, u32 pci_id)
 				    DRM_FILE_PAGE_OFFSET_SIZE);
 	ret = ttm_device_init(&dev_priv->bdev, &vmw_bo_driver,
 			      dev_priv->drm.dev,
+#ifdef __linux__
 			      dev_priv->drm.anon_inode->i_mapping,
+#elif defined(__FreeBSD__)
+                              NULL,
+#endif
 			      &dev_priv->vma_manager,
 			      dev_priv->map_mode == vmw_dma_alloc_coherent,
 			      false);
@@ -1111,7 +1179,9 @@ static int vmw_driver_load(struct vmw_private *dev_priv, u32 pci_id)
 	}
 
 	dev_priv->pm_nb.notifier_call = vmwgfx_pm_notifier;
+#ifdef __linux__
 	register_pm_notifier(&dev_priv->pm_nb);
+#endif
 
 	return 0;
 
@@ -1153,7 +1223,9 @@ static void vmw_driver_unload(struct drm_device *dev)
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
 	enum vmw_res_type i;
 
+#ifdef __linux__
 	unregister_pm_notifier(&dev_priv->pm_nb);
+#endif
 
 	if (dev_priv->ctx.res_ht_initialized)
 		vmwgfx_ht_remove(&dev_priv->ctx.res_ht);
@@ -1394,6 +1466,7 @@ static void vmw_remove(struct pci_dev *pdev)
 	vmw_driver_unload(dev);
 }
 
+#ifdef __linux__
 static unsigned long
 vmw_get_unmapped_area(struct file *file, unsigned long uaddr,
 		      unsigned long len, unsigned long pgoff,
@@ -1405,10 +1478,12 @@ vmw_get_unmapped_area(struct file *file, unsigned long uaddr,
 	return drm_get_unmapped_area(file, uaddr, len, pgoff, flags,
 				     &dev_priv->vma_manager);
 }
+#endif
 
 static int vmwgfx_pm_notifier(struct notifier_block *nb, unsigned long val,
 			      void *ptr)
 {
+#ifdef __linux__
 	struct vmw_private *dev_priv =
 		container_of(nb, struct vmw_private, pm_nb);
 
@@ -1433,6 +1508,7 @@ static int vmwgfx_pm_notifier(struct notifier_block *nb, unsigned long val,
 	default:
 		break;
 	}
+#endif
 	return 0;
 }
 
@@ -1572,7 +1648,9 @@ static const struct file_operations vmwgfx_driver_fops = {
 	.compat_ioctl = vmw_compat_ioctl,
 #endif
 	.llseek = noop_llseek,
+#ifdef __linux__
 	.get_unmapped_area = vmw_get_unmapped_area,
+#endif
 };
 
 static const struct drm_driver driver = {
@@ -1667,13 +1745,24 @@ static void __exit vmwgfx_exit(void)
 	pci_unregister_driver(&vmw_pci_driver);
 }
 
+#ifdef __linux__
 module_init(vmwgfx_init);
 module_exit(vmwgfx_exit);
+#elif defined(__FreeBSD__)
+LKPI_DRIVER_MODULE(vmwgfx, vmwgfx_init, vmwgfx_exit);
+LKPI_PNP_INFO(pci, vmwgfx, vmw_pci_id_list);
+#endif
+
 
 MODULE_AUTHOR("VMware Inc. and others");
 MODULE_DESCRIPTION("Standalone drm driver for the VMware SVGA device");
 MODULE_LICENSE("GPL and additional rights");
+#ifdef __linux__
 MODULE_VERSION(__stringify(VMWGFX_DRIVER_MAJOR) "."
 	       __stringify(VMWGFX_DRIVER_MINOR) "."
 	       __stringify(VMWGFX_DRIVER_PATCHLEVEL) "."
 	       "0");
+#elif defined(__FreeBSD__)
+MODULE_VERSION(vmwgfx, VMWGFX_DRIVER_MAJOR);
+#endif
+
