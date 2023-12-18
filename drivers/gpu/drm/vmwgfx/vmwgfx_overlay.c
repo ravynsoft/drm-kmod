@@ -25,6 +25,10 @@
  *
  **************************************************************************/
 
+#ifdef __FreeBSD__
+#include <asm/atomic64.h>
+#endif
+
 #include <drm/ttm/ttm_placement.h>
 
 #include "device_include/svga_overlay.h"

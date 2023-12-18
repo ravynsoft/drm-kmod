@@ -51,9 +51,13 @@
 #define RETRIES                 3
 
 #define VMW_HYPERVISOR_MAGIC    0x564D5868
+
 #ifdef __FreeBSD__
 #define VMW_HYPERVISOR_PORT     0x5658
 #define VMW_HYPERVISOR_HB_PORT  0x5659
+
+// FIXME: should this be aliased to FOLL_WRITE?
+#define FOLL_LONGTERM           0       /* not implemented in FreeBSD */
 #endif
 
 #define VMW_PORT_CMD_MSG        30
@@ -1178,7 +1182,11 @@ int vmw_mksstat_add_ioctl(struct drm_device *dev, void *data,
 	hypervisor_ppn_add((PPN64)page_to_pfn(page));
 
 	dev_priv->mksstat_user_pages[slot] = page;
+#ifdef __linux__
 	atomic_set(&dev_priv->mksstat_user_pids[slot], task_pgrp_vnr(current));
+#elif defined(__FreeBSD__)
+	atomic_set(&dev_priv->mksstat_user_pids[slot], current->task_thread->td_proc->p_pgid);
+#endif
 
 	arg->id = slot;
 
@@ -1232,7 +1240,11 @@ int vmw_mksstat_remove_ioctl(struct drm_device *dev, void *data,
 
 	DRM_DEV_INFO(dev->dev, "pid=%d arg.id=%zu\n", current->pid, slot);
 
+#ifdef __linux__
 	pgid = task_pgrp_vnr(current);
+#elif defined(__FreeBSD__)
+	pgid = current->task_thread->td_proc->p_pgid;
+#endif
 	pid = atomic_cmpxchg(&dev_priv->mksstat_user_pids[slot], pgid, MKSSTAT_PID_RESERVED);
 
 	if (!pid)
