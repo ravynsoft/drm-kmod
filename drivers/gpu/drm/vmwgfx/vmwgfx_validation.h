@@ -89,6 +89,7 @@ struct vmw_fence_obj;
  * is known to be very small
  */
 #endif
+#ifdef __linux__
 #define DECLARE_VAL_CONTEXT(_name, _ht, _merge_dups)			\
 	struct vmw_validation_context _name =				\
 	{ .ht = _ht,							\
@@ -100,6 +101,19 @@ struct vmw_fence_obj;
 	  .merge_dups = _merge_dups,					\
 	  .mem_size_left = 0,						\
 	}
+#elif defined(__FreeBSD__)
+#define DECLARE_VAL_CONTEXT(_name, _ht, _merge_dups)			\
+	struct vmw_validation_context _name =				\
+	{ .ht = _ht,							\
+	  .resource_list = LINUX_LIST_HEAD_INIT((_name).resource_list),	\
+	  .resource_ctx_list = LINUX_LIST_HEAD_INIT((_name).resource_ctx_list), \
+	  .bo_list = LINUX_LIST_HEAD_INIT((_name).bo_list),			\
+	  .page_list = LINUX_LIST_HEAD_INIT((_name).page_list),		\
+	  .res_mutex = NULL,						\
+	  .merge_dups = _merge_dups,					\
+	  .mem_size_left = 0,						\
+	}
+#endif
 
 /**
  * vmw_validation_has_bos - return whether the validation context has
