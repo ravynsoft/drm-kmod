@@ -27,6 +27,9 @@
 
 #include <linux/pci.h>
 #include <linux/sched/signal.h>
+#ifdef __FreeBSD__
+#include <linux/interrupt.h>
+#endif
 
 #include "vmwgfx_drv.h"
 

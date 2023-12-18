@@ -24,7 +24,9 @@
  *
  */
 
+#ifdef __linux__
 #include <linux/objtool.h>
+#endif
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -49,6 +51,10 @@
 #define RETRIES                 3
 
 #define VMW_HYPERVISOR_MAGIC    0x564D5868
+#ifdef __FreeBSD__
+#define VMW_HYPERVISOR_PORT     0x5658
+#define VMW_HYPERVISOR_HB_PORT  0x5659
+#endif
 
 #define VMW_PORT_CMD_MSG        30
 #define VMW_PORT_CMD_HB_MSG     0
@@ -101,7 +107,11 @@ static int vmw_open_channel(struct rpc_channel *channel, unsigned int protocol)
 
 	VMW_PORT(VMW_PORT_CMD_OPEN_CHANNEL,
 		(protocol | GUESTMSG_FLAG_COOKIE), si, di,
-		0,
+#ifdef __linux__
+                0,
+#elif defined(__FreeBSD__)
+ 		VMW_HYPERVISOR_PORT,
+#endif
 		VMW_HYPERVISOR_MAGIC,
 		eax, ebx, ecx, edx, si, di);
 
@@ -134,7 +144,11 @@ static int vmw_close_channel(struct rpc_channel *channel)
 
 	VMW_PORT(VMW_PORT_CMD_CLOSE_CHANNEL,
 		0, si, di,
-		channel->channel_id << 16,
+#ifdef __linux__
+                (channel->channel_id << 16),
+#elif defined(__FreeBSD__)
+ 		(VMW_HYPERVISOR_PORT | (channel->channel_id << 16)),
+#endif
 		VMW_HYPERVISOR_MAGIC,
 		eax, ebx, ecx, edx, si, di);
 
@@ -170,8 +184,11 @@ static unsigned long vmw_port_hb_out(struct rpc_channel *channel,
 		VMW_PORT_HB_OUT(
 			(MESSAGE_STATUS_SUCCESS << 16) | VMW_PORT_CMD_HB_MSG,
 			msg_len, si, di,
-			VMWARE_HYPERVISOR_HB | channel_id |
-			VMWARE_HYPERVISOR_OUT,
+#ifdef __linux__
+ 			channel_id,
+#elif defined(__FreeBSD__)
+ 			VMW_HYPERVISOR_HB_PORT | channel_id,
+#endif
 			VMW_HYPERVISOR_MAGIC, bp,
 			eax, ebx, ecx, edx, si, di);
 
@@ -192,7 +209,11 @@ static unsigned long vmw_port_hb_out(struct rpc_channel *channel,
 
 		VMW_PORT(VMW_PORT_CMD_MSG | (MSG_TYPE_SENDPAYLOAD << 16),
 			 word, si, di,
-			 channel->channel_id << 16,
+#ifdef __linux__
+ 			 (channel->channel_id << 16),
+#elif defined(__FreeBSD__)
+ 			 VMW_HYPERVISOR_PORT | (channel->channel_id << 16),
+#endif
 			 VMW_HYPERVISOR_MAGIC,
 			 eax, ebx, ecx, edx, si, di);
 	}
@@ -226,7 +247,11 @@ static unsigned long vmw_port_hb_in(struct rpc_channel *channel, char *reply,
 		VMW_PORT_HB_IN(
 			(MESSAGE_STATUS_SUCCESS << 16) | VMW_PORT_CMD_HB_MSG,
 			reply_len, si, di,
-			VMWARE_HYPERVISOR_HB | channel_id,
+#ifdef __linux__
+ 			channel_id,
+#elif defined(__FreeBSD__)
+ 			VMW_HYPERVISOR_HB_PORT | channel_id,
+#endif
 			VMW_HYPERVISOR_MAGIC, bp,
 			eax, ebx, ecx, edx, si, di);
 
@@ -243,7 +268,11 @@ static unsigned long vmw_port_hb_in(struct rpc_channel *channel, char *reply,
 
 		VMW_PORT(VMW_PORT_CMD_MSG | (MSG_TYPE_RECVPAYLOAD << 16),
 			 MESSAGE_STATUS_SUCCESS, si, di,
-			 channel->channel_id << 16,
+#ifdef __linux__
+ 			 (channel->channel_id << 16),
+#elif defined(__FreeBSD__)
+ 			 VMW_HYPERVISOR_PORT | (channel->channel_id << 16),
+#endif
 			 VMW_HYPERVISOR_MAGIC,
 			 eax, ebx, ecx, edx, si, di);
 
@@ -282,7 +311,11 @@ static int vmw_send_msg(struct rpc_channel *channel, const char *msg)
 
 		VMW_PORT(VMW_PORT_CMD_SENDSIZE,
 			msg_len, si, di,
-			channel->channel_id << 16,
+#ifdef __linux__
+			(channel->channel_id << 16),
+#elif defined(__FreeBSD__)
+ 			VMW_HYPERVISOR_PORT | (channel->channel_id << 16),
+#endif
 			VMW_HYPERVISOR_MAGIC,
 			eax, ebx, ecx, edx, si, di);
 
@@ -307,7 +340,9 @@ static int vmw_send_msg(struct rpc_channel *channel, const char *msg)
 
 	return -EINVAL;
 }
+#ifdef __linux__
 STACK_FRAME_NON_STANDARD(vmw_send_msg);
+#endif
 
 
 /**
@@ -340,7 +375,11 @@ static int vmw_recv_msg(struct rpc_channel *channel, void **msg,
 
 		VMW_PORT(VMW_PORT_CMD_RECVSIZE,
 			0, si, di,
-			channel->channel_id << 16,
+#ifdef __linux__
+			(channel->channel_id << 16),
+#elif defined(__FreeBSD__)
+ 			VMW_HYPERVISOR_PORT | (channel->channel_id << 16),
+#endif
 			VMW_HYPERVISOR_MAGIC,
 			eax, ebx, ecx, edx, si, di);
 
@@ -384,7 +423,11 @@ static int vmw_recv_msg(struct rpc_channel *channel, void **msg,
 
 		VMW_PORT(VMW_PORT_CMD_RECVSTATUS,
 			MESSAGE_STATUS_SUCCESS, si, di,
-			channel->channel_id << 16,
+#ifdef __linux__
+			(channel->channel_id << 16),
+#elif defined(__FreeBSD__)
+ 			VMW_HYPERVISOR_PORT | (channel->channel_id << 16),
+#endif
 			VMW_HYPERVISOR_MAGIC,
 			eax, ebx, ecx, edx, si, di);
 
@@ -410,7 +453,9 @@ static int vmw_recv_msg(struct rpc_channel *channel, void **msg,
 
 	return 0;
 }
+#ifdef __linux__
 STACK_FRAME_NON_STANDARD(vmw_recv_msg);
+#endif
 
 
 /**
@@ -570,8 +615,13 @@ int vmw_msg_ioctl(struct drm_device *dev, void *data,
 		return -ENOMEM;
 	}
 
+#ifdef __linux__
 	length = strncpy_from_user(msg, (void __user *)((unsigned long)arg->send),
 				   MAX_USER_MSG_LENGTH);
+#elif defined(__FreeBSD__)
+	length = copy_from_user(msg, (void __user *)((unsigned long)arg->send),
+				   MAX_USER_MSG_LENGTH);
+#endif
 	if (length < 0 || length >= MAX_USER_MSG_LENGTH) {
 		DRM_ERROR("Userspace message access failure.\n");
 		kfree(msg);
@@ -649,7 +699,11 @@ static inline void hypervisor_ppn_reset_all(void)
 
 	VMW_PORT(VMW_PORT_CMD_MKSGS_RESET,
 		0, si, di,
+#ifdef __linux__
 		0,
+#elif defined(__FreeBSD__)
+                VMW_HYPERVISOR_PORT,
+#endif
 		VMW_HYPERVISOR_MAGIC,
 		eax, ebx, ecx, edx, si, di);
 }
@@ -666,7 +720,11 @@ static inline void hypervisor_ppn_add(PPN64 pfn)
 
 	VMW_PORT(VMW_PORT_CMD_MKSGS_ADD_PPN,
 		(unsigned long)pfn, si, di,
+#ifdef __linux__
 		0,
+#elif defined(__FreeBSD__)
+                VMW_HYPERVISOR_PORT,
+#endif
 		VMW_HYPERVISOR_MAGIC,
 		eax, ebx, ecx, edx, si, di);
 }
@@ -683,7 +741,11 @@ static inline void hypervisor_ppn_remove(PPN64 pfn)
 
 	VMW_PORT(VMW_PORT_CMD_MKSGS_REMOVE_PPN,
 		(unsigned long)pfn, si, di,
+#ifdef __linux__
 		0,
+#elif defined(__FreeBSD__)
+                VMW_HYPERVISOR_PORT,
+#endif
 		VMW_HYPERVISOR_MAGIC,
 		eax, ebx, ecx, edx, si, di);
 }
@@ -1071,8 +1133,13 @@ int vmw_mksstat_add_ioctl(struct drm_device *dev, void *data,
 	pdesc->statLength = arg->stat_len;
 	pdesc->infoLength = arg->info_len;
 	pdesc->strsLength = arg->strs_len;
+#ifdef __linux__
 	desc_len = strncpy_from_user(pdesc->description, u64_to_user_ptr(arg->description),
 		ARRAY_SIZE(pdesc->description) - 1);
+#elif defined(__FreeBSD__)
+	desc_len = copy_from_user(pdesc->description, u64_to_user_ptr(arg->description),
+		ARRAY_SIZE(pdesc->description) - 1);
+#endif
 
 	if (desc_len < 0) {
 		atomic_set(&dev_priv->mksstat_user_pids[slot], 0);

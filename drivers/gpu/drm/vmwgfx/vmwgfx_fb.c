@@ -30,6 +30,9 @@
 
 #include <drm/drm_fourcc.h>
 #include <drm/ttm/ttm_placement.h>
+#ifdef __FreeBSD__
+#include <drm/drm_fb_helper.h>
+#endif
 
 #include "vmwgfx_drv.h"
 #include "vmwgfx_kms.h"
@@ -316,6 +319,7 @@ static int vmw_fb_pan_display(struct fb_var_screeninfo *var,
 	return 0;
 }
 
+#ifdef __linux__
 static void vmw_deferred_io(struct fb_info *info,
 			    struct list_head *pagelist)
 {
@@ -358,6 +362,7 @@ static struct fb_deferred_io vmw_defio = {
 	.delay		= VMW_DIRTY_DELAY,
 	.deferred_io	= vmw_deferred_io,
 };
+#endif // defined(__linux__)
 
 /*
  * Draw code
@@ -732,10 +737,14 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	par->dirty.active = true;
 	spin_lock_init(&par->dirty.lock);
 	mutex_init(&par->bo_mutex);
+#ifdef __linux__
 	info->fbdefio = &vmw_defio;
 	fb_deferred_io_init(info);
 
 	ret = register_framebuffer(info);
+#elif defined(__FreeBSD__)
+	ret = linux_register_framebuffer(info);
+#endif
 	if (unlikely(ret != 0))
 		goto err_defio;
 
@@ -744,7 +753,9 @@ int vmw_fb_init(struct vmw_private *vmw_priv)
 	return 0;
 
 err_defio:
+#ifdef __linux__
 	fb_deferred_io_cleanup(info);
+#endif
 err_aper:
 err_free:
 	vfree(par->vmalloc);
@@ -767,9 +778,15 @@ int vmw_fb_close(struct vmw_private *vmw_priv)
 	par = info->par;
 
 	/* ??? order */
+#ifdef __linux__
 	fb_deferred_io_cleanup(info);
+#endif
 	cancel_delayed_work_sync(&par->local_work);
+#ifdef __linux__
 	unregister_framebuffer(info);
+#elif defined(__FreeBSD__)
+	linux_unregister_framebuffer(info);
+#endif
 
 	mutex_lock(&par->bo_mutex);
 	(void) vmw_fb_kms_detach(par, true, true);
@@ -797,7 +814,9 @@ int vmw_fb_off(struct vmw_private *vmw_priv)
 	par->dirty.active = false;
 	spin_unlock_irqrestore(&par->dirty.lock, flags);
 
+#ifdef __linux__
 	flush_delayed_work(&info->deferred_work);
+#endif
 	flush_delayed_work(&par->local_work);
 
 	return 0;
