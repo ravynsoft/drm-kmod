@@ -306,7 +306,11 @@ static int vmw_ttm_map_dma(struct vmw_ttm_tt *vmw_tt)
 		ret = sg_alloc_table_from_pages_segment(
 			&vmw_tt->sgt, vsgt->pages, vsgt->num_pages, 0,
 			(unsigned long)vsgt->num_pages << PAGE_SHIFT,
+#ifdef __linux__
 			dma_get_max_seg_size(dev_priv->drm.dev), GFP_KERNEL);
+#elif defined(__FreeBSD__)
+                        65536, GFP_KERNEL);
+#endif
 		if (ret)
 			goto out_sg_alloc_fail;
 

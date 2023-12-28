@@ -80,6 +80,7 @@ struct vmw_bo_dirty {
  */
 static void vmw_bo_dirty_scan_pagetable(struct vmw_buffer_object *vbo)
 {
+#ifdef __linux__
 	struct vmw_bo_dirty *dirty = vbo->dirty;
 	pgoff_t offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
@@ -105,6 +106,9 @@ static void vmw_bo_dirty_scan_pagetable(struct vmw_buffer_object *vbo)
 						  offset, &dirty->bitmap[0],
 						  &dirty->start, &dirty->end);
 	}
+#elif defined(__FreeBSD__)
+        // FIXME: what is needed here?
+#endif
 }
 
 /**
@@ -118,10 +122,11 @@ static void vmw_bo_dirty_scan_pagetable(struct vmw_buffer_object *vbo)
  */
 static void vmw_bo_dirty_scan_mkwrite(struct vmw_buffer_object *vbo)
 {
+#ifdef __linux__
 	struct vmw_bo_dirty *dirty = vbo->dirty;
 	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
-	pgoff_t num_marked;
+	pgoff_t num_marked = 0;
 
 	if (dirty->end <= dirty->start)
 		return;
@@ -151,6 +156,9 @@ static void vmw_bo_dirty_scan_mkwrite(struct vmw_buffer_object *vbo)
 				   dirty->end - dirty->start);
 		dirty->change_count = 0;
 	}
+#elif defined(__FreeBSD__)
+        // FIXME: what is needed here?
+#endif
 }
 
 /**
@@ -184,6 +192,7 @@ void vmw_bo_dirty_scan(struct vmw_buffer_object *vbo)
 static void vmw_bo_dirty_pre_unmap(struct vmw_buffer_object *vbo,
 				   pgoff_t start, pgoff_t end)
 {
+#ifdef __linux__
 	struct vmw_bo_dirty *dirty = vbo->dirty;
 	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
@@ -196,6 +205,9 @@ static void vmw_bo_dirty_pre_unmap(struct vmw_buffer_object *vbo,
 					  end - start, offset,
 					  &dirty->bitmap[0], &dirty->start,
 					  &dirty->end);
+#elif defined(__FreeBSD__)
+        // FIXME: what is needed here?
+#endif
 }
 
 /**
@@ -209,12 +221,16 @@ static void vmw_bo_dirty_pre_unmap(struct vmw_buffer_object *vbo,
 void vmw_bo_dirty_unmap(struct vmw_buffer_object *vbo,
 			pgoff_t start, pgoff_t end)
 {
+#ifdef __linux__
 	unsigned long offset = drm_vma_node_start(&vbo->base.base.vma_node);
 	struct address_space *mapping = vbo->base.bdev->dev_mapping;
 
 	vmw_bo_dirty_pre_unmap(vbo, start, end);
 	unmap_shared_mapping_range(mapping, (offset + start) << PAGE_SHIFT,
 				   (loff_t) (end - start) << PAGE_SHIFT);
+#elif defined(__FreeBSD__)
+        // FIXME: what is needed here?
+#endif
 }
 
 /**
@@ -250,6 +266,7 @@ int vmw_bo_dirty_add(struct vmw_buffer_object *vbo)
 	dirty->start = dirty->bitmap_size;
 	dirty->end = 0;
 	dirty->ref_count = 1;
+#ifdef __linux__
 	if (num_pages < PAGE_SIZE / sizeof(pte_t)) {
 		dirty->method = VMW_BO_DIRTY_PAGETABLE;
 	} else {
@@ -265,6 +282,9 @@ int vmw_bo_dirty_add(struct vmw_buffer_object *vbo)
 						  &dirty->bitmap[0],
 						  &dirty->start, &dirty->end);
 	}
+#elif defined(__FreeBSD__)
+        // FIXME: what is needed here?
+#endif
 
 	vbo->dirty = dirty;
 
@@ -429,7 +449,11 @@ vm_fault_t vmw_bo_vm_fault(struct vm_fault *vmf)
 	if (ret)
 		return ret;
 
+#ifdef __linux__
 	num_prefault = (vma->vm_flags & VM_RAND_READ) ? 1 :
+#elif defined(__FreeBSD__)
+	num_prefault = (vma->vm_flags & VM_READ) ? 1 :
+#endif
 		TTM_BO_VM_NUM_PREFAULT;
 
 	if (vbo->dirty) {

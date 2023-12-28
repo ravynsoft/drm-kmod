@@ -70,8 +70,10 @@ out_no_access:
 int vmw_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	static const struct vm_operations_struct vmw_vm_ops = {
+#ifdef __linux__
 		.pfn_mkwrite = vmw_bo_vm_mkwrite,
 		.page_mkwrite = vmw_bo_vm_mkwrite,
+#endif
 		.fault = vmw_bo_vm_fault,
 		.open = ttm_bo_vm_open,
 		.close = ttm_bo_vm_close,

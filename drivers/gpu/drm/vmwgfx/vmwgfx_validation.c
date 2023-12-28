@@ -127,7 +127,10 @@ void *vmw_validation_mem_alloc(struct vmw_validation_context *ctx,
 		if (ctx->vm)
 			ctx->vm_size_left -= PAGE_SIZE;
 
+// FIXME this will leak memory on FreeBSD until we start to track these
+#ifdef __linux__
 		list_add_tail(&page->lru, &ctx->page_list);
+#endif
 		ctx->page_address = page_address(page);
 		ctx->mem_size_left = PAGE_SIZE;
 	}
@@ -148,12 +151,17 @@ void *vmw_validation_mem_alloc(struct vmw_validation_context *ctx,
  */
 static void vmw_validation_mem_free(struct vmw_validation_context *ctx)
 {
+#ifdef __linux__
 	struct page *entry, *next;
 
+// FIXME this will leak memory on FreeBSD until we start to track these
+// FreeBSD does not have a 'lru' in struct vm_page so we need to find
+// somewhere to keep this list
 	list_for_each_entry_safe(entry, next, &ctx->page_list, lru) {
 		list_del_init(&entry->lru);
 		__free_page(entry);
 	}
+#endif
 
 	ctx->mem_size_left = 0;
 	if (ctx->vm && ctx->total_mem) {
