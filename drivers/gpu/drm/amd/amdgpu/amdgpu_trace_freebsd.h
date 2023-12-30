@@ -17,8 +17,9 @@ trace_amdgpu_cs_ioctl(struct amdgpu_job *job){
 }
 
 static inline void
-trace_amdgpu_cs(struct amdgpu_cs_parser *parser, int i){
-	CTR2(KTR_DRM, "amdgpu_cs %d %p", i, parser);
+trace_amdgpu_cs(struct amdgpu_cs_parser *parser, struct amdgpu_job *job,
+    struct amdgpu_ib *ib){
+	CTR3(KTR_DRM, "amdgpu_cs %p %p %p", parser, job, ib);
 }
 
 static inline void
@@ -132,6 +133,12 @@ trace_amdgpu_ttm_tt_unpopulate(struct amdgpu_device *adev, uint64_t dma_address,
 static inline void
 trace_amdgpu_ib_pipe_sync(struct amdgpu_job *job, struct dma_fence *fence){
 	CTR2(KTR_DRM, "amdgpu_ib_pipe_sync %p, fence %p", job, fence);
+}
+
+static inline void
+trace_amdgpu_reset_reg_dumps(uint32_t address, uint32_t value){
+	CTR2(KTR_DRM, "amdgpu_reset_reg_dumps address %x, value %x",
+	    address, value);
 }
 
 #define trace_amdgpu_mm_rreg(dev, reg, ret)	\

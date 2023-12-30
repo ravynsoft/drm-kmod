@@ -30,9 +30,9 @@ devclass_t drm_devclass;
 MALLOC_DEFINE(DRM_MEM_DRIVER, "drm_driver", "DRM DRIVER Data Structures");
 
 SYSCTL_NODE(_dev, OID_AUTO, drm, CTLFLAG_RW, 0, "DRM args (compat)");
-SYSCTL_INT(_dev_drm, OID_AUTO, __drm_debug, CTLFLAG_RWTUN, &__drm_debug, 0, "drm debug flags (compat)");
+SYSCTL_LONG(_dev_drm, OID_AUTO, __drm_debug, CTLFLAG_RWTUN, &__drm_debug, 0, "drm debug flags (compat)");
 SYSCTL_NODE(_hw, OID_AUTO, dri, CTLFLAG_RW, 0, "DRI args");
-SYSCTL_INT(_hw_dri, OID_AUTO, __drm_debug, CTLFLAG_RWTUN, &__drm_debug, 0, "drm debug flags");
+SYSCTL_LONG(_hw_dri, OID_AUTO, __drm_debug, CTLFLAG_RWTUN, &__drm_debug, 0, "drm debug flags");
 int skip_ddb;
 SYSCTL_INT(_dev_drm, OID_AUTO, skip_ddb, CTLFLAG_RWTUN, &skip_ddb, 0, "go straight to dumping core (compat)");
 SYSCTL_INT(_hw_dri, OID_AUTO, skip_ddb, CTLFLAG_RWTUN, &skip_ddb, 0, "go straight to dumping core");
@@ -160,7 +160,7 @@ drm_modevent(module_t mod, int type, void *data)
 {
 	switch (type) {
 	case MOD_LOAD:
-		TUNABLE_INT_FETCH("drm.debug", &__drm_debug);
+		TUNABLE_LONG_FETCH("drm.debug", &__drm_debug);
 		callout_init(&reset_debug_log_handle, 1);
 		break;
 	case MOD_UNLOAD:
@@ -189,9 +189,7 @@ MODULE_DEPEND(drmn, iicbb, IICBB_MINVER, IICBB_PREFVER, IICBB_MAXVER);
 MODULE_DEPEND(drmn, pci, 1, 1, 1);
 MODULE_DEPEND(drmn, mem, 1, 1, 1);
 MODULE_DEPEND(drmn, linuxkpi, 1, 1, 1);
-#if __FreeBSD_version >= 1400085
-MODULE_DEPEND(drmn, linuxkpi_hdmi, 1, 1, 1);
-#endif
+MODULE_DEPEND(drmn, linuxkpi_video, 1, 1, 1);
 MODULE_DEPEND(drmn, dmabuf, 1, 1, 1);
 #ifdef CONFIG_DEBUG_FS
 MODULE_DEPEND(drmn, lindebugfs, 1, 1, 1);

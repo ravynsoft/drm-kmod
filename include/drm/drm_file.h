@@ -75,9 +75,7 @@ struct drm_minor {
 	struct drm_device *dev;
 
 #ifdef __FreeBSD__
-	device_t bsd_kdev; 		/* OS device */
 	struct cdev *bsd_device; 	/* Device number for mknod */
-	struct sigio *buf_sigio; 	/* Processes waiting for SIGIO */
 #endif
 	struct dentry *debugfs_root;
 
@@ -253,7 +251,7 @@ struct drm_file {
 	 */
 	struct drm_master *master;
 
-	/** @master_lock: Serializes @master. */
+	/** @master_lookup_lock: Serializes @master. */
 	spinlock_t master_lookup_lock;
 
 	/** @pid: Process that opened this file. */
@@ -430,14 +428,5 @@ void drm_send_event_timestamp_locked(struct drm_device *dev,
 				     ktime_t timestamp);
 
 struct file *mock_drm_getfile(struct drm_minor *minor, unsigned int flags);
-
-#ifdef CONFIG_MMU
-struct drm_vma_offset_manager;
-unsigned long drm_get_unmapped_area(struct file *file,
-				    unsigned long uaddr, unsigned long len,
-				    unsigned long pgoff, unsigned long flags,
-				    struct drm_vma_offset_manager *mgr);
-#endif /* CONFIG_MMU */
-
 
 #endif /* _DRM_FILE_H_ */

@@ -16,16 +16,17 @@ SRCDIR=	${.CURDIR:H}/drivers/gpu/drm/i915
 KMOD=	i915kms
 SRCS=	\
 	i915_active.c \
-	i915_buddy.c \
 	i915_cmd_parser.c \
 	i915_config.c \
 	i915_deps.c \
 	i915_driver.c \
+	i915_drm_client.c \
 	i915_getparam.c \
 	i915_gem.c \
 	i915_gem_evict.c \
 	i915_gem_gtt.c \
 	i915_gem_ww.c \
+	i915_ioctl.c \
 	i915_irq.c \
 	i915_memcpy.c \
 	i915_mitigations.c \
@@ -47,7 +48,7 @@ SRCS=	\
 	i915_vgpu.c \
 	i915_ttm_buddy_manager.c \
 	i915_vma.c \
-	i915_vma_snapshot.c \
+	i915_vma_resource.c \
 	intel_acpi.c \
 	intel_atomic.c \
 	intel_atomic_plane.c \
@@ -105,11 +106,16 @@ SRCS+=	dvo_ch7017.c \
 	dvo_tfp410.c \
 	g4x_dp.c \
 	g4x_hdmi.c \
+	hsw_ips.c \
 	icl_dsi.c \
 	intel_backlight.c \
 	intel_crt.c \
+	intel_crtc_state_dump.c \
 	intel_ddi.c \
 	intel_ddi_buf_trans.c \
+	intel_display_power_map.c \
+	intel_display_power_well.c \
+	intel_dkl_phy.c \
 	intel_dp.c \
 	intel_dp_aux.c \
 	intel_dp_aux_backlight.c \
@@ -130,6 +136,8 @@ SRCS+=	dvo_ch7017.c \
 	intel_hdmi.c \
 	intel_lspcon.c \
 	intel_lvds.c \
+	intel_modeset_setup.c \
+	intel_modeset_verify.c \
 	intel_panel.c \
 	intel_pch_display.c \
 	intel_pch_refclk.c \
@@ -145,6 +153,7 @@ SRCS+=	dvo_ch7017.c \
 	i9xx_plane.c \
 	skl_scaler.c \
 	skl_universal_plane.c \
+	skl_watermark.c \
 	vlv_dsi.c \
 	vlv_dsi_pll.c
 
@@ -169,13 +178,18 @@ SRCS+=	gen2_engine_cs.c \
 	intel_execlists_submission.c \
 	intel_ggtt.c \
 	intel_ggtt_fencing.c \
+	intel_ggtt_gmch.c \
+	intel_gsc.c \
 	intel_gt.c \
 	intel_gt_buffer_pool.c \
 	intel_gt_clock_utils.c \
 	intel_gt_irq.c \
+	intel_gt_mcr.c \
 	intel_gt_pm.c \
 	intel_gt_pm_irq.c \
 	intel_gt_requests.c \
+	intel_gt_sysfs.c \
+	intel_gt_sysfs_pm.c \
 	intel_gtt.c \
 	intel_guc_rc.c \
 	intel_guc_slpc.c \
@@ -191,6 +205,7 @@ SRCS+=	gen2_engine_cs.c \
 	intel_ring.c \
 	intel_ring_submission.c \
 	intel_rps.c \
+	intel_sa_media.c \
 	intel_sseu.c \
 	intel_timeline.c \
 	intel_workarounds.c \
@@ -200,8 +215,10 @@ SRCS+=	gen2_engine_cs.c \
 # gt/uc*
 SRCS+=	intel_guc.c \
 	intel_guc_ads.c \
+	intel_guc_capture.c \
 	intel_guc_ct.c \
 	intel_guc_fw.c \
+	intel_guc_hwconfig.c \
 	intel_guc_log.c \
 	intel_guc_submission.c \
 	intel_huc.c \
@@ -327,12 +344,14 @@ CWARNFLAGS.intel_fbc.c=		-Wno-unused-variable
 CWARNFLAGS.intel_fbdev.c=	-Wno-initializer-overrides
 CWARNFLAGS.intel_freebsd.c=	-Wno-unused-function
 CWARNFLAGS.i915_gem_context.c=	-Wno-unused-function
+CWARNFLAGS.intel_guc_capture.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.intel_hdmi.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.intel_hotplug.c=	-Wno-uninitialized
 CWARNFLAGS.intel_pm.c=		-Wno-incompatible-pointer-types-discards-qualifiers
 CWARNFLAGS.intel_psr.c=		-Wno-unused-but-set-variable
 CWARNFLAGS.intel_region_ttm.c=	-Wno-missing-prototypes
 CWARNFLAGS.intel_reset.c=	-Wno-unused-but-set-variable
+CWARNFLAGS.intel_sseu.c=	-Wno-incompatible-pointer-types-discards-qualifiers
 CWARNFLAGS.i915_debugfs.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.i915_driver.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.i915_irq.c=		-Wno-unused-but-set-variable
@@ -344,6 +363,7 @@ CWARNFLAGS.i915_pci.c=		-Wno-initializer-overrides
 CWARNFLAGS.i915_active.c=	-Wno-unused-function
 CWARNFLAGS.i915_sw_fence.c=	-Wno-unused-function
 CWARNFLAGS.i915_vma.c=		-Wno-unused-function -Wno-unused-but-set-variable
+CWARNFLAGS.i915_vma_resource.c=	-Wno-incompatible-pointer-types
 CWARNFLAGS.i9xx_plane.c=	-Wno-unused-but-set-variable
 CWARNFLAGS.g4x_dp.c=		-Wno-shift-count-overflow
 CWARNFLAGS.skl_universal_plane.c=	-Wno-unused-but-set-variable

@@ -23,16 +23,13 @@
  * Rob Clark <robdclark@gmail.com>
  */
 
-#ifndef	DEBUG
-#define DEBUG /* for pr_debug() */
-#endif
-
 #include <linux/stdarg.h>
 
 #include <linux/io.h>
 #include <linux/moduleparam.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
+#include <linux/dynamic_debug.h>
 
 #include <drm/drm.h>
 #include <drm/drm_drv.h>
@@ -44,9 +41,9 @@
  */
 #ifdef __FreeBSD__
 #if defined(DRM_DEBUG_LOG_ALL) || defined(INVARIANTS)
-unsigned int __drm_debug = 0xffffffff;	/* bitmask of DRM_UT_x */
+unsigned long __drm_debug = 0xffffffff;	/* bitmask of DRM_UT_x */
 #else
-unsigned int __drm_debug = 0;
+unsigned long __drm_debug = 0;
 #endif
 #endif
 EXPORT_SYMBOL(__drm_debug);
@@ -60,7 +57,30 @@ MODULE_PARM_DESC(debug, "Enable debug output, where each bit enables a debug cat
 "\t\tBit 5 (0x20)  will enable VBL messages (vblank code)\n"
 "\t\tBit 7 (0x80)  will enable LEASE messages (leasing code)\n"
 "\t\tBit 8 (0x100) will enable DP messages (displayport code)");
-module_param_named(debug, __drm_debug, int, 0600);
+
+#if !defined(CONFIG_DRM_USE_DYNAMIC_DEBUG)
+module_param_named(debug, __drm_debug, ulong, 0600);
+#else
+/* classnames must match vals of enum drm_debug_category */
+DECLARE_DYNDBG_CLASSMAP(drm_debug_classes, DD_CLASS_TYPE_DISJOINT_BITS, 0,
+			"DRM_UT_CORE",
+			"DRM_UT_DRIVER",
+			"DRM_UT_KMS",
+			"DRM_UT_PRIME",
+			"DRM_UT_ATOMIC",
+			"DRM_UT_VBL",
+			"DRM_UT_STATE",
+			"DRM_UT_LEASE",
+			"DRM_UT_DP",
+			"DRM_UT_DRMRES");
+
+static struct ddebug_class_param drm_debug_bitmap = {
+	.bits = &__drm_debug,
+	.flags = "p",
+	.map = &drm_debug_classes,
+};
+module_param_cb(debug, &param_ops_dyndbg_classes, &drm_debug_bitmap, 0600);
+#endif
 
 void __drm_puts_coredump(struct drm_printer *p, const char *str)
 {
@@ -182,7 +202,8 @@ EXPORT_SYMBOL(__drm_printfn_info);
 
 void __drm_printfn_debug(struct drm_printer *p, struct va_format *vaf)
 {
-	pr_debug("%s %pV", p->prefix, vaf);
+	/* pr_debug callsite decorations are unhelpful here */
+	printk(KERN_DEBUG "%s %pV", p->prefix, vaf);
 }
 EXPORT_SYMBOL(__drm_printfn_debug);
 
@@ -296,15 +317,16 @@ void drm_dev_printk(const struct device *dev, const char *level,
 #endif
 
 #ifdef __linux__
-void drm_dev_dbg(const struct device *dev, enum drm_debug_category category,
-		 const char *format, ...)
+void __drm_dev_dbg(struct _ddebug *desc, const struct device *dev,
+		   enum drm_debug_category category, const char *format, ...)
 {
 	struct va_format vaf;
 	va_list args;
 
-	if (!drm_debug_enabled(category))
+	if (!__drm_debug_enabled(category))
 		return;
 
+	/* we know we are printing for either syslog, tracefs, or both */
 	va_start(args, format);
 	vaf.fmt = format;
 	vaf.va = &args;
@@ -318,10 +340,11 @@ void drm_dev_dbg(const struct device *dev, enum drm_debug_category category,
 
 	va_end(args);
 }
-EXPORT_SYMBOL(drm_dev_dbg);
+EXPORT_SYMBOL(__drm_dev_dbg);
 #elif defined(__FreeBSD__)
-void drm_dev_dbg(const struct device *dev, unsigned int category,
-		 const char *func, const char *format, ...)
+void __drm_dev_dbg(struct _ddebug *desc, const struct device *dev,
+		   enum drm_debug_category category, const char *func,
+		   const char *format, ...)
 {
 	va_list args;
 
@@ -341,12 +364,12 @@ void drm_dev_dbg(const struct device *dev, unsigned int category,
 #endif
 
 #ifdef __linux__
-void __drm_dbg(enum drm_debug_category category, const char *format, ...)
+void ___drm_dbg(struct _ddebug *desc, enum drm_debug_category category, const char *format, ...)
 {
 	struct va_format vaf;
 	va_list args;
 
-	if (!drm_debug_enabled(category))
+	if (!__drm_debug_enabled(category))
 		return;
 
 	va_start(args, format);
@@ -358,10 +381,10 @@ void __drm_dbg(enum drm_debug_category category, const char *format, ...)
 
 	va_end(args);
 }
-EXPORT_SYMBOL(__drm_dbg);
+EXPORT_SYMBOL(___drm_dbg);
 #elif defined(__FreeBSD__)
-void __drm_dbg(unsigned int category, const char *function_name,
-	       const char *format, ...)
+void ___drm_dbg(struct _ddebug *desc, enum drm_debug_category category,
+		const char *function_name, const char *format, ...)
 {
 	struct va_format vaf;
 	va_list args;
@@ -385,7 +408,7 @@ void __drm_dbg(unsigned int category, const char *function_name,
 
 	va_end(args);
 }
-EXPORT_SYMBOL(__drm_dbg);
+EXPORT_SYMBOL(___drm_dbg);
 #endif
 
 #ifdef __linux__

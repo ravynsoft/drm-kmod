@@ -38,11 +38,7 @@
 #include <drm/ttm/ttm_caching.h>
 
 #ifdef __FreeBSD__
-#include <linux/completion.h>
-#include <linux/wait.h>
-
 #include <drm/ttm/ttm_sysctl_freebsd.h>
-
 SYSCTL_NODE(_hw, OID_AUTO, ttm,
     CTLFLAG_RW | CTLFLAG_MPSAFE, 0,
     "TTM memory manager parameters");
@@ -85,7 +81,7 @@ pgprot_t ttm_prot_from_caching(enum ttm_caching caching, pgprot_t tmp)
 #endif /* CONFIG_UML */
 #endif /* __i386__ || __x86_64__ */
 #if defined(__ia64__) || defined(__arm__) || defined(__aarch64__) || \
-	defined(__powerpc__) || defined(__mips__)
+	defined(__powerpc__) || defined(__mips__) || defined(__loongarch__)
 	if (caching == ttm_write_combined)
 		tmp = pgprot_writecombine(tmp);
 	else
@@ -108,9 +104,6 @@ MODULE_DEPEND(ttm, agp, 1, 1, 1);
 #endif
 MODULE_DEPEND(ttm, drmn, 2, 2, 2);
 MODULE_DEPEND(ttm, linuxkpi, 1, 1, 1);
-#if __FreeBSD_version >= 1400085
-MODULE_DEPEND(ttm, linuxkpi_hdmi, 1, 1, 1);
-#endif
 MODULE_DEPEND(ttm, dmabuf, 1, 1, 1);
 #ifdef CONFIG_DEBUG_FS
 MODULE_DEPEND(amdgpu, lindebugfs, 1, 1, 1);

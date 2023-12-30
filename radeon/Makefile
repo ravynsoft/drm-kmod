@@ -14,17 +14,14 @@ SRCS=	atom.c \
 	atombios_encoders.c \
 	atombios_i2c.c \
 	btc_dpm.c \
-	cayman_blit_shaders.c \
 	ci_dpm.c \
 	ci_smc.c \
 	cik.c \
-	cik_blit_shaders.c \
 	cik_sdma.c \
 	cypress_dpm.c \
 	dce3_1_afmt.c \
 	dce6_afmt.c \
 	evergreen.c \
-	evergreen_blit_shaders.c \
 	evergreen_cs.c \
 	evergreen_dma.c \
 	evergreen_hdmi.c \
@@ -39,7 +36,6 @@ SRCS=	atom.c \
 	r420.c \
 	r520.c \
 	r600.c \
-	r600_blit_shaders.c \
 	r600_cs.c \
 	r600_dma.c \
 	r600_dpm.c \
@@ -58,7 +54,6 @@ SRCS=	atom.c \
 	radeon_device.c \
 	radeon_display.c \
 	radeon_dp_auxch.c \
-	radeon_dp_mst.c \
 	radeon_drv.c \
 	radeon_encoders.c \
 	radeon_fb.c \
@@ -100,7 +95,6 @@ SRCS=	atom.c \
 	rv770_dpm.c \
 	rv770_smc.c \
 	si.c \
-	si_blit_shaders.c \
 	si_dma.c \
 	si_dpm.c \
 	si_smc.c \

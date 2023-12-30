@@ -4,13 +4,15 @@ __FBSDID("$FreeBSD$");
 #include <linux/device.h>
 #include <linux/acpi.h>
 #include <drm/i915_drm.h>
-#include "i915_trace.h"
 #include <linux/mm.h>
 #include <linux/io-mapping.h>
 
 #include <asm/pgtable.h>
 
-#include "i915_drv.h"
+#include <acpi/video.h>
+
+#include "i915_driver.h"
+#include "intel_acpi.h"
 #include <linux/console.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
@@ -21,12 +23,7 @@ __FBSDID("$FreeBSD$");
 
 #include <machine/md_var.h>
 
-/*
- * intel_graphics_stolen_* are defined in sys/dev/pci/pcivar.h
- * and set at early boot from machdep.c. Copy over the values
- * here to a linux_resource struct.
- */
-struct linux_resource intel_graphics_stolen_res;
+#include <dev/agp/agp_i810.h>
 
 void *intel_gtt_get_registers(void);
 void _intel_gtt_get(size_t *gtt_total, size_t *stolen_size, unsigned long *mappable_end);
@@ -52,8 +49,38 @@ static struct _intel_private {
 } intel_private;
 #endif
 
+void *
+bsd_intel_pci_bus_alloc_mem(device_t dev, int *rid, uintmax_t size,
+    resource_size_t *start, resource_size_t *end)
+{
+	struct resource *res;
+	device_t vga;
+
+	vga = device_get_parent(dev);
+	res = BUS_ALLOC_RESOURCE(device_get_parent(vga), dev, SYS_RES_MEMORY,
+	    rid, 0, ~0UL, size, RF_ACTIVE | RF_SHAREABLE);
+	if (res != NULL) {
+		*start = rman_get_start(res);
+		*end = rman_get_end(res);
+	}
+
+	return (res);
+}
+
+void
+bsd_intel_pci_bus_release_mem(device_t dev, int rid, void *res)
+{
+	device_t vga;
+
+	vga = device_get_parent(dev);
+	BUS_DEACTIVATE_RESOURCE(device_get_parent(vga),
+	    dev, SYS_RES_MEMORY, rid, res);
+	BUS_RELEASE_RESOURCE(device_get_parent(vga),
+	    dev, SYS_RES_MEMORY, rid, res);
+}
+
 bool
-intel_enable_gtt(void)
+intel_gmch_enable_gtt(void)
 {
 #ifdef __notyet__
 	u8 __iomem *reg;
@@ -135,7 +162,7 @@ intel_gmch_remove(void)
 }
 
 void
-intel_gtt_insert_page(dma_addr_t addr, unsigned int pg, unsigned int flags)
+intel_gmch_gtt_insert_page(dma_addr_t addr, unsigned int pg, unsigned int flags)
 {
 
 	intel_gtt_install_pte(pg, addr, flags);
@@ -143,7 +170,7 @@ intel_gtt_insert_page(dma_addr_t addr, unsigned int pg, unsigned int flags)
 }
 
 void
-linux_intel_gtt_insert_sg_entries(struct sg_table *st, unsigned int pg_start,
+intel_gmch_gtt_insert_sg_entries(struct sg_table *st, unsigned int pg_start,
     unsigned int flags)
 {
 	struct sg_page_iter sg_iter;
@@ -158,4 +185,34 @@ linux_intel_gtt_insert_sg_entries(struct sg_table *st, unsigned int pg_start,
 	}
 
 	intel_gtt_read_pte(pg_start + i - 1);
+}
+
+void
+intel_gmch_gtt_get(uint64_t *gtt_total, phys_addr_t *mappable_base,
+    resource_size_t *mappable_end)
+{
+	struct intel_gtt *gtt;
+
+	gtt = intel_gtt_get();
+	*gtt_total = gtt->gtt_total_entries << PAGE_SHIFT;
+	*mappable_base = gtt->gma_bus_addr;
+	*mappable_end = gtt->gtt_mappable_entries << PAGE_SHIFT;
+}
+
+void
+intel_gmch_gtt_clear_range(unsigned int first_entry, unsigned int num_entries)
+{
+	intel_gtt_clear_range(first_entry, num_entries);
+}
+
+void
+intel_gmch_gtt_flush(void)
+{
+	intel_gtt_chipset_flush();
+}
+
+void
+intel_acpi_video_register(struct drm_i915_private *i915)
+{
+	acpi_video_register();
 }

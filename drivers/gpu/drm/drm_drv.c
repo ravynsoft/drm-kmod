@@ -623,7 +623,7 @@ static int drm_dev_init(struct drm_device *dev,
 	mutex_init(&dev->clientlist_mutex);
 	mutex_init(&dev->master_mutex);
 
-	ret = drmm_add_action(dev, drm_dev_init_release, NULL);
+	ret = drmm_add_action_or_reset(dev, drm_dev_init_release, NULL);
 	if (ret)
 		return ret;
 
@@ -691,8 +691,6 @@ static int devm_drm_dev_init(struct device *parent,
 
 	return devm_add_action_or_reset(parent,
 					devm_drm_dev_init_release, dev);
-
-	return ret;
 }
 
 void *__devm_drm_dev_alloc(struct device *parent,

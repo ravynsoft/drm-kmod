@@ -42,8 +42,6 @@ struct dma_fence_chain {
 	spinlock_t lock;
 };
 
-extern const struct dma_fence_ops dma_fence_chain_ops;
-
 #define dma_fence_chain_for_each(iter, head)	\
 	for (iter = dma_fence_get(head); iter; \
 	     iter = dma_fence_chain_walk(iter))
@@ -53,6 +51,13 @@ struct dma_fence *dma_fence_chain_walk(struct dma_fence *fence);
 int dma_fence_chain_find_seqno(struct dma_fence **fence, uint64_t seqno);
 void dma_fence_chain_init(struct dma_fence_chain *chain, struct dma_fence *prev,
   struct dma_fence *fence, uint64_t seqno);
+
+static inline struct dma_fence *
+dma_fence_chain_contained(struct dma_fence *fence)
+{
+	struct dma_fence_chain *chain = to_dma_fence_chain(fence);
+	return (chain != NULL ? chain->fence : fence);
+}
 
 MALLOC_DECLARE(M_DMABUF);
 

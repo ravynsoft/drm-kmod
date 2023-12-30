@@ -2,7 +2,7 @@
 
 SRCDIR=	${.CURDIR:H}/drivers/gpu/drm
 
-.PATH:	${SRCDIR} ${SRCDIR}/scheduler
+.PATH:	${SRCDIR} ${SRCDIR}/display ${SRCDIR}/scheduler
 
 .include "../kconfig.mk"
 .include "../linuxkpi_version.mk"
@@ -14,6 +14,7 @@ SRCS=	drm_atomic.c \
 	drm_atomic_uapi.c \
 	drm_aperture.c \
 	drm_auth.c \
+	drm_buddy.c \
 	drm_blend.c \
 	drm_bridge.c \
 	drm_cache.c \
@@ -24,11 +25,7 @@ SRCS=	drm_atomic.c \
 	drm_crtc.c \
 	drm_crtc_helper.c \
 	drm_damage_helper.c \
-	drm_dp_dual_mode_helper.c \
-	drm_dp_helper.c \
-	drm_dp_mst_topology.c \
 	drm_drv.c \
-	drm_dsc.c \
 	drm_dumb_buffers.c \
 	drm_edid.c \
 	drm_displayid.c \
@@ -38,6 +35,7 @@ SRCS=	drm_atomic.c \
 	drm_fourcc.c \
 	drm_framebuffer.c \
 	drm_gem.c \
+	drm_gem_atomic_helper.c \
 	drm_gem_framebuffer_helper.c \
 	drm_hashtab.c \
 	drm_ioctl.c \
@@ -61,7 +59,6 @@ SRCS=	drm_atomic.c \
 	drm_property.c \
 	drm_rect.c \
 	drm_self_refresh_helper.c \
-	drm_scdc_helper.c \
 	drm_syncobj.c \
 	drm_sysctl_freebsd.c \
 	drm_sysfs.c \
@@ -91,14 +88,6 @@ SRCS+=	\
 	drm_debugfs_crc.c
 .endif
 
-.if !empty(KCONFIG:MDRM_DP_AUX_CHARDEV)
-SRCS+=	drm_dp_aux_dev.c
-.endif
-
-.if !empty(KCONFIG:MDRM_DP_AUX_BUS)
-SRCS+=	drm_dp_aux_bus.c
-.endif
-
 .if !empty(KCONFIG:MDRM_MIPI_DSI)
 SRCS+=	drm_mipi_dsi.c
 .endif
@@ -116,6 +105,20 @@ SRCS+=	drm_privacy_screen.c \
 SRCS+=	sched_main.c \
 	sched_fence.c \
 	sched_entity.c
+
+# drm display (moved from amdgpu)
+SRCS+=	drm_scdc_helper.c \
+	drm_display_helper_mod.c \
+	drm_dp_dual_mode_helper.c \
+	drm_dp_mst_topology.c \
+	drm_dp_helper.c \
+	drm_dsc_helper.c \
+	drm_hdcp_helper.c \
+	drm_hdmi_helper.c
+
+.if !empty(KCONFIG:MDRM_DP_AUX_CHARDEV)
+SRCS+=	drm_dp_aux_dev.c
+.endif
 
 CLEANFILES+= ${KMOD}.ko.full ${KMOD}.ko.debug
 
