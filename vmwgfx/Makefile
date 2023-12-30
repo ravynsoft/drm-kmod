@@ -8,39 +8,42 @@ SRCDIR=	${.CURDIR:H}/drivers/gpu/drm/vmwgfx
 
 KMOD=	vmwgfx
 SRCS=	\
-	ttm_lock.c \
 	ttm_object.c \
 	vmwgfx_binding.c \
 	vmwgfx_blit.c \
 	vmwgfx_bo.c \
-	vmwgfx_cmdbuf_res.c \
+	vmwgfx_cmd.c \
 	vmwgfx_cmdbuf.c \
+	vmwgfx_cmdbuf_res.c \
 	vmwgfx_context.c \
 	vmwgfx_cotable.c \
+	vmwgfx_devcaps.c \
 	vmwgfx_drv.c \
 	vmwgfx_execbuf.c \
 	vmwgfx_fb.c \
 	vmwgfx_fence.c \
-	vmwgfx_fifo.c \
+	vmwgfx_gem.c \
 	vmwgfx_gmr.c \
 	vmwgfx_gmrid_manager.c \
+	vmwgfx_hashtab.c \
 	vmwgfx_ioctl.c \
 	vmwgfx_irq.c \
 	vmwgfx_kms.c \
 	vmwgfx_ldu.c \
-	vmwgfx_marker.c \
 	vmwgfx_mob.c \
 	vmwgfx_msg.c \
 	vmwgfx_overlay.c \
-	vmwgfx_prime.c \
 	vmwgfx_page_dirty.c \
+	vmwgfx_prime.c \
 	vmwgfx_resource.c \
 	vmwgfx_scrn.c \
 	vmwgfx_shader.c \
 	vmwgfx_simple_resource.c \
 	vmwgfx_so.c \
 	vmwgfx_stdu.c \
+	vmwgfx_streamoutput.c \
 	vmwgfx_surface.c \
+	vmwgfx_system_manager.c \
 	vmwgfx_ttm_buffer.c \
 	vmwgfx_ttm_glue.c \
 	vmwgfx_va.c \

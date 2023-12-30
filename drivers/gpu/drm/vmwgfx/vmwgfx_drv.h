@@ -96,7 +96,7 @@
 #define MKSSTAT_CAPACITY (1U << MKSSTAT_CAPACITY_LOG2)
 
 #ifdef __FreeBSD__
-SYSCTL_DECL(_hw_radeonkms);
+SYSCTL_DECL(_hw_vmwgfx);
 #endif
 
 struct vmw_fpriv {
