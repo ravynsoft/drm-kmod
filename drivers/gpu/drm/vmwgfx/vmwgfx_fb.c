@@ -31,6 +31,7 @@
 #include <drm/drm_fourcc.h>
 #include <drm/ttm/ttm_placement.h>
 #ifdef __FreeBSD__
+#include <drm/drm_framebuffer.h>
 #include <drm/drm_fb_helper.h>
 #endif
 

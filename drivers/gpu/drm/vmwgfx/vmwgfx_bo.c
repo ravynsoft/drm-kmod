@@ -408,9 +408,15 @@ int vmw_bo_create_kernel(struct vmw_private *dev_priv, unsigned long size,
 
 	drm_gem_private_object_init(vdev, &bo->base, size);
 
+#ifdef __linux__
 	ret = ttm_bo_init_reserved(&dev_priv->bdev, bo, size,
 				   ttm_bo_type_kernel, placement, 0,
 				   &ctx, NULL, NULL, NULL);
+#elif defined(__FreeBSD__)
+	ret = ttm_bo_init_reserved(&dev_priv->bdev, bo,
+				   ttm_bo_type_kernel, placement, 0,
+				   &ctx, NULL, NULL, NULL);
+#endif
 	if (unlikely(ret))
 		goto error_free;
 
@@ -489,10 +495,17 @@ int vmw_bo_init(struct vmw_private *dev_priv,
 	size = ALIGN(size, PAGE_SIZE);
 	drm_gem_private_object_init(vdev, &vmw_bo->base.base, size);
 
+#ifdef __linux__
 	ret = ttm_bo_init_reserved(bdev, &vmw_bo->base, size,
 				   ttm_bo_type_device,
 				   placement,
 				   0, &ctx, NULL, NULL, bo_free);
+#elif defined(__FreeBSD__)
+	ret = ttm_bo_init_reserved(bdev, &vmw_bo->base,
+				   ttm_bo_type_device,
+				   placement,
+				   0, &ctx, NULL, NULL, bo_free);
+#endif
 	if (unlikely(ret)) {
 		return ret;
 	}
@@ -753,10 +766,20 @@ void vmw_bo_fence_single(struct ttm_buffer_object *bo,
 
 	if (fence == NULL) {
 		vmw_execbuf_fence_commands(NULL, dev_priv, &fence, NULL);
+#ifdef __linux__
 		dma_resv_add_excl_fence(bo->base.resv, &fence->base);
+#elif defined(__FreeBSD__)
+		dma_resv_add_fence(bo->base.resv, &fence->base,
+                    DMA_RESV_USAGE_KERNEL);
+#endif
 		dma_fence_put(&fence->base);
 	} else
+#ifdef __linux__
 		dma_resv_add_excl_fence(bo->base.resv, &fence->base);
+#elif defined(__FreeBSD__)
+		dma_resv_add_fence(bo->base.resv, &fence->base,
+                    DMA_RESV_USAGE_KERNEL);
+#endif
 }
 
 

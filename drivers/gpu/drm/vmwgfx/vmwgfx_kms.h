@@ -28,6 +28,10 @@
 #ifndef VMWGFX_KMS_H_
 #define VMWGFX_KMS_H_
 
+#ifdef __FreeBSD__
+#include <drm/drm_framebuffer.h>
+#endif
+
 #include <drm/drm_encoder.h>
 #include <drm/drm_probe_helper.h>
 

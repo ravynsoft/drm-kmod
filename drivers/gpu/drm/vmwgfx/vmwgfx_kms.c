@@ -453,10 +453,13 @@ int vmw_du_primary_plane_atomic_check(struct drm_plane *plane,
 {
 	struct drm_plane_state *new_state = drm_atomic_get_new_plane_state(state,
 									   plane);
+#ifdef __linux__
 	struct drm_crtc_state *crtc_state = NULL;
+#endif
 	struct drm_framebuffer *new_fb = new_state->fb;
-	int ret;
+	int ret = 0;
 
+#ifdef __linux__
 	if (new_state->crtc)
 		crtc_state = drm_atomic_get_new_crtc_state(state,
 							   new_state->crtc);
@@ -465,6 +468,8 @@ int vmw_du_primary_plane_atomic_check(struct drm_plane *plane,
 						  DRM_PLANE_HELPER_NO_SCALING,
 						  DRM_PLANE_HELPER_NO_SCALING,
 						  false, true);
+#endif
+// FIXME: BSD doesn't seem to define the helpers above. Do we need it?
 
 	if (!ret && new_fb) {
 		struct drm_crtc *crtc = new_state->crtc;
@@ -495,10 +500,13 @@ int vmw_du_cursor_plane_atomic_check(struct drm_plane *plane,
 	struct drm_plane_state *new_state = drm_atomic_get_new_plane_state(state,
 									   plane);
 	int ret = 0;
+#ifdef __linux__
 	struct drm_crtc_state *crtc_state = NULL;
+#endif
 	struct vmw_surface *surface = NULL;
 	struct drm_framebuffer *fb = new_state->fb;
 
+#ifdef __linux__
 	if (new_state->crtc)
 		crtc_state = drm_atomic_get_new_crtc_state(new_state->state,
 							   new_state->crtc);
@@ -507,6 +515,9 @@ int vmw_du_cursor_plane_atomic_check(struct drm_plane *plane,
 						  DRM_PLANE_HELPER_NO_SCALING,
 						  DRM_PLANE_HELPER_NO_SCALING,
 						  true, true);
+#endif
+// FIXME: BSD doesn't seem to define the helpers above. Do we need it?
+
 	if (ret)
 		return ret;
 
