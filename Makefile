@@ -21,11 +21,10 @@ DEFAULT_KMODS=	dmabuf		\
 		ttm		\
 		drm		\
 		linuxkpi_video	\
-		amd		\
 		radeon
 
 .if ${MACHINE_ARCH} == "amd64" || ${MACHINE_ARCH} == "i386"
-DEFAULT_KMODS+=	i915
+DEFAULT_KMODS+=	i915 amd
 .endif
 
 .if defined(DUMMYGFX)
